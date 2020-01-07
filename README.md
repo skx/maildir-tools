@@ -84,7 +84,7 @@ S Steve Kemp <skx@debian.org> Bug#553945: Acknowledgement (ttylog: Doesn't test 
 
 Here `${flags}` was replaced by the message flags (`S` in this case), `${from}` with the message sender, etc.
 
-(You can also use `${file}` to refer to the filename of the message, and other header-values as you would expect.)
+(You can also use `${file}` to refer to the filename of the message, and other header-values as you would expect.  The other magical values are "`${index}/${total}`" which show the current/total number of entries.)
 
 You can specify either the short-path to the Maildir, beneath the root directory, or the complete path `/home/skx/Maildir/people-foo`, depending upon your preference.
 

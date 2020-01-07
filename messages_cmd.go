@@ -45,7 +45,7 @@ func (p *messageCmd) SetFlags(f *flag.FlagSet) {
 	prefix := os.Getenv("HOME") + "/Maildir/"
 
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
-	f.StringVar(&p.format, "format", "[${flags}] ${subject}", "Specify the format-string to use for the message-display")
+	f.StringVar(&p.format, "format", "[${index}/${total} - ${flags}] ${subject}", "Specify the format-string to use for the message-display")
 }
 
 //
@@ -106,7 +106,7 @@ func (p *messageCmd) showMessages(path string) {
 	//
 	// For each file - parse the email message and output a summary.
 	//
-	for _, msg := range files {
+	for index, msg := range files {
 
 		//
 		// Open it
@@ -158,6 +158,10 @@ func (p *messageCmd) showMessages(path string) {
 
 			case "file":
 				return msg
+			case "index":
+				return fmt.Sprintf("%d", index+1)
+			case "total":
+				return fmt.Sprintf("%d", len(files))
 			default:
 				return (header.Get(field))
 			}
