@@ -22,6 +22,7 @@ func main() {
 	subcommands.Register(&maildirCmd{}, "")
 	subcommands.Register(&messageCmd{}, "")
 	subcommands.Register(&versionCmd{}, "")
+	subcommands.Register(&uiCmd{}, "")
 
 	flag.Parse()
 	ctx := context.Background()

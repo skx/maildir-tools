@@ -22,13 +22,15 @@ This should be almost trivial to write.  Right?  The hardest part would be handl
 
 # Usage
 
-There are currently two sub-commands:
+There are currently three sub-commands:
 
 * `maildir-utils maildirs`
   * This lists all your maildir folders, recursively.
 * `maildir-utils messages`
   * This lists the messages inside a folder.
   * Handling the output in a flexible fashion.
+* `maildir-utils ui`
+  * Toy user-interface that proves we could make something of ourselves.
 
 Both of these default to looking in `~/Maildir` but the `-prefix /path/to/root` will let you change the directory.  Maildirectories are handled recursively, and things are pretty fast but I guess local SSDs help with that.  For everything else there is always the option to cache things.
 
@@ -87,6 +89,15 @@ Here `${flags}` was replaced by the message flags (`S` in this case), `${from}` 
 You can specify either the short-path to the Maildir, beneath the root directory, or the complete path `/home/skx/Maildir/people-foo`, depending upon your preference.
 
 
+## `maildir-utils ui`
+
+This is an __extremely__ minimal UI, which shows a list of maildirs.
+
+It works by executing itself, which is suboptimal.
+
+You can view/scroll the message lists.  `vi` keys work.  As do others.
+
+
 
 # TODO
 
@@ -115,15 +126,15 @@ And exec vi/emacs to compose/reply.
 * [ ] Consider a caching-plan
 * [ ] Consider how threading would be handled, or even sorting of messages.
 * [ ] Consider a message-view
-* [ ] Sketch out a console UI to prove it is even worthwhile, possible.
-  * Start with maildir-view
-  * Then allow message-list-view
-  * Then message-view
-  * Modal/Stateful
-  * Should essentially `exec $self $mode`
-    * Cache the output to RAM?  File?
-    * When to refresh?
-    * Display the output.  But modify it
+* [x] Sketch out a console UI to prove it is even worthwhile, possible.
+  * [x] Start with maildir-view
+  * [ ] Then allow message-list-view
+  * [ ] Then message-view
+  * [ ] Modal/Stateful
+  * [ ] Should essentially `exec $self $mode`
+    * [ ] Cache the output to RAM?  File?
+    * [ ] When to refresh?
+    * [ ] Display the output.  But modify it
        * e.g. We can change "/home/skx/Maildir/xxx" to "XXX" in the display
        * But we want the full-path to know what to enter when the user chooses the directory
        * Similarly when viewing a message-list we'll need ${file} to know what to view, but we probably don't want to display that on-screen.
