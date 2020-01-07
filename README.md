@@ -93,3 +93,42 @@ Of course how to display attachments is a harder question.  If we had
 After that a simple command to set-flags (i.e. mark as read/replied).
 
 And exec vi/emacs to compose/reply.
+
+
+## Plan
+
+* Move the prefix-handling to a common-library.
+* Move the formatting of a message-list to a common-library.
+* Consider a caching-plan
+* Consider how threading would be handled, or even sorting of messages.
+  * This might be hard.
+* Consider a message-view:
+* Sketch out a console UI to prove it is even worthwhile, possible.
+  * Start with maildir-view
+  * Then allow message-list-view
+  * Then message-view
+  * Modal/Stateful
+  * Should essentially `exec $self $mode`
+    * Cache the output to RAM?  File?
+    * When to refresh?
+    * Display the output.  But modify it
+       * e.g. We can change "/home/skx/Maildir/xxx" to "XXX" in the display
+       * But we want the full-path to know what to enter when the user chooses the directory
+       * Similarly when viewing a message-list we'll need ${file} to know what to view, but we probably don't want to display that on-screen.
+
+
+Displaying a message will probably be done via a text/template, like so:
+
+```
+TO: ${to}
+From:${from}
+Subject: ${subject}
+Date: ${date}
+Flags: ${flags}
+
+${Body:Text}
+${Attachment-Names}
+```
+
+But we'll need to allow the user to specify their own, and allow arbitrary
+header values to be shown.  Or even toggled.
