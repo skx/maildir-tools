@@ -121,6 +121,7 @@ And exec vi/emacs to compose/reply.
 * [x] Allow listing maildirs with a format string
   * "`${name} ${unread} ${total}`"
 * [x] Fix `maildir-utils maildirs -unread` to work.
+* [ ] Fix RFC2047-decoding of message-subjects.
 * [ ] Move the prefix-handling to a common-library.
 * [ ] Move the formatting of a message-list to a common-library.
 * [ ] Consider a caching-plan
