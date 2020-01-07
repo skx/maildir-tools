@@ -42,10 +42,10 @@ Currently this project will build a single monolithic binary with a couple of su
 
 ## `maildir-utils maildirs`
 
-This will output a list of maildir directories, by default showing the complete path.  You can add `-short` to view only the name of the maildir itself
+This will output a list of maildir directories, by default showing the complete path of each maildir which was found.
 
 ```
-$ maildir-utils maildirs | grep debian-packages
+$ maildir-utils maildirs --format '${name}' | grep debian-packages
 /home/skx/Maildir/debian-packages
 /home/skx/Maildir/debian-packages-Pkg-javascript-devel
 /home/skx/Maildir/debian-packages-aatv
@@ -58,6 +58,16 @@ $ maildir-utils maildirs | grep debian-packages
 /home/skx/Maildir/debian-packages-apt
 /home/skx/Maildir/debian-packages-apt-listchanges
 ```
+
+Flags can be used to refine the output, for example:
+
+* `-short` to view only the name of the maildir itself
+  * e.g. "debian-packages", "debian-packages-abiword", etc.
+* `-format '${unread} ${total} ${name}'`
+  * To specify what is output.
+* `-unread`
+  * Only show maildirs containing unread messages.
+
 
 ## `maildir-utils messages`
 
@@ -97,13 +107,15 @@ And exec vi/emacs to compose/reply.
 
 ## Plan
 
-* Move the prefix-handling to a common-library.
-* Move the formatting of a message-list to a common-library.
-* Consider a caching-plan
-* Consider how threading would be handled, or even sorting of messages.
-  * This might be hard.
-* Consider a message-view:
-* Sketch out a console UI to prove it is even worthwhile, possible.
+* [x] Allow listing maildirs with a format string
+  * "`${name} ${unread} ${total}`"
+* [x] Fix `maildir-utils maildirs -unread` to work.
+* [ ] Move the prefix-handling to a common-library.
+* [ ] Move the formatting of a message-list to a common-library.
+* [ ] Consider a caching-plan
+* [ ] Consider how threading would be handled, or even sorting of messages.
+* [ ] Consider a message-view
+* [ ] Sketch out a console UI to prove it is even worthwhile, possible.
   * Start with maildir-view
   * Then allow message-list-view
   * Then message-view

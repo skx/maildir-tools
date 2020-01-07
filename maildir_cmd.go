@@ -23,6 +23,9 @@ type maildirCmd struct {
 	// Show only folders with unread mail?
 	unreadOnly bool
 
+	// Format string for output
+	format string
+
 	// The root directory to our maildir hierarchy
 	prefix string
 }
@@ -45,9 +48,10 @@ func (p *maildirCmd) SetFlags(f *flag.FlagSet) {
 
 	prefix := os.Getenv("HOME") + "/Maildir/"
 
+	f.BoolVar(&p.short, "short", false, "Show only the short-name.")
 	f.BoolVar(&p.unreadOnly, "unread", false, "Show only folders containing unread messages.")
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
-	f.BoolVar(&p.short, "short", false, "Show only the short-name.")
+	f.StringVar(&p.format, "format", "${unread}/${total} - ${name}", "The format string to display.")
 }
 
 //
@@ -107,10 +111,52 @@ func (p *maildirCmd) showMaildirs() {
 	//
 	for _, ent := range maildirs {
 
+		//
+		// Copy the name, in case we truncate it
+		//
+		name := ent
+
 		if p.short {
 			ent = ent[len(p.prefix):]
 		}
-		fmt.Printf("%s\n", ent)
+
+		//
+		// Unread-cache
+		//
+		unreadCount := -1
+
+		if p.unreadOnly {
+			unreadCount = unreadMessagesInMaildir(name)
+		}
+
+		//
+		// Helper for expanding our format-string
+		//
+		mapper := func(field string) string {
+			switch field {
+			case "name":
+				return ent
+			case "total":
+				return fmt.Sprintf("%d", messagesInMaildir(name))
+			case "unread":
+				if unreadCount < 0 {
+					unreadCount = unreadMessagesInMaildir(name)
+				}
+				return fmt.Sprintf("%d", unreadCount)
+			default:
+				return "Unknown variable " + field
+			}
+		}
+
+		// Are we only showing folders with unread messages?
+		// If so continue unless this qualifies
+		if p.unreadOnly && unreadCount < 1 {
+			continue
+		}
+
+		// Show the output
+		fmt.Println(os.Expand(p.format, mapper))
+
 	}
 }
 
