@@ -45,7 +45,7 @@ func (p *messageCmd) SetFlags(f *flag.FlagSet) {
 	prefix := os.Getenv("HOME") + "/Maildir/"
 
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
-	f.StringVar(&p.format, "format", "${FILE} - ${FLAGS}", "Specify the format-string to use for the message-display")
+	f.StringVar(&p.format, "format", "[${flags}] ${subject}", "Specify the format-string to use for the message-display")
 }
 
 //
