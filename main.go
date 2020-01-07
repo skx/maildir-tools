@@ -21,6 +21,7 @@ func main() {
 	// Our commands
 	subcommands.Register(&maildirCmd{}, "")
 	subcommands.Register(&messageCmd{}, "")
+	subcommands.Register(&versionCmd{}, "")
 
 	flag.Parse()
 	ctx := context.Background()

@@ -9,7 +9,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net/mail"
 	"os"
 	"path/filepath"
@@ -114,7 +113,8 @@ func (p *messageCmd) showMessages(path string) {
 		//
 		file, err := os.Open(msg)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Fprintf(os.Stderr, "Failed to open %s: %s\n",
+				msg, err.Error())
 			continue
 		}
 
@@ -123,9 +123,14 @@ func (p *messageCmd) showMessages(path string) {
 		//
 		m, err := mail.ReadMessage(bufio.NewReader(file))
 		if err != nil {
-			log.Fatal("Failed to read file %s: %s", file, err.Error())
+			fmt.Fprintf(os.Stderr, "Failed to read file %s: %s\n",
+				msg, err.Error())
 			continue
 		}
+
+		//
+		// Ensure we don't leak.
+		//
 		file.Close()
 
 		header := m.Header

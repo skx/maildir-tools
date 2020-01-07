@@ -8,17 +8,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
-	"os"
 	"runtime"
 
 	"github.com/google/subcommands"
 )
-
-//
-// modified during testing
-//
-var out io.Writer = os.Stdout
 
 var (
 	version = "unreleased"
@@ -50,9 +43,9 @@ func (p *versionCmd) SetFlags(f *flag.FlagSet) {
 // Show the version - using the "out"-writer.
 //
 func showVersion(verbose bool) {
-	fmt.Fprintf(out, "%s\n", version)
+	fmt.Printf("%s\n", version)
 	if verbose {
-		fmt.Fprintf(out, "Built with %s\n", runtime.Version())
+		fmt.Printf("Built with %s\n", runtime.Version())
 	}
 }
 
