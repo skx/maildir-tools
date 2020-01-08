@@ -66,9 +66,7 @@ Subject: {{.Subject}}{{range $i, $e := .Attachments}}
 Attachment {{$i}}: {{$e}}
 {{end}}
 
-
-{{.Body}}
-`
+{{.Body}}`
 
 	//
 	// This is the structure we'll use
@@ -100,10 +98,12 @@ Attachment {{$i}}: {{$e}}
 		data.Body = "No body"
 	}
 
+	// Add in the attachment details
 	for _, a := range env.Attachments {
 		data.Attachments = append(data.Attachments, a.FileName)
 	}
 
+	// Render.
 	var out bytes.Buffer
 	t := template.Must(template.New("view.tmpl").Parse(tmpl))
 	err = t.Execute(&out, data)

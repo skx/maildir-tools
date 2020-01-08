@@ -1,5 +1,5 @@
 //
-// Show our version - This uses a level of indirection for our test-case
+// Show our version
 //
 
 package main
