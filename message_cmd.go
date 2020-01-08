@@ -57,16 +57,22 @@ func (p *messageCmd) GetMessage(path string) (string, error) {
 	file.Close()
 
 	//
-	// Now format the message
+	// We'll format the message with a template
 	//
 	tmpl := `To: {{.To}}
 From: {{.From}}
 Date: {{.Date}}
-Subject: {{.Subject}}
+Subject: {{.Subject}}{{range $i, $e := .Attachments}}
+Attachment {{$i}}: {{$e}}
+{{end}}
+
 
 {{.Body}}
 `
 
+	//
+	// This is the structure we'll use
+	//
 	type Message struct {
 		To          string
 		From        string
@@ -75,6 +81,10 @@ Subject: {{.Subject}}
 		Body        string
 		Attachments []string
 	}
+
+	//
+	// Populate the instance
+	//
 	var data Message
 	data.Subject = env.GetHeader("Subject")
 	data.To = env.GetHeader("To")
