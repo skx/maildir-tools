@@ -19,7 +19,8 @@ func main() {
 	subcommands.Register(subcommands.CommandsCommand(), "")
 
 	// Our commands
-	subcommands.Register(&maildirCmd{}, "")
+	subcommands.Register(&maildirsCmd{}, "")
+	subcommands.Register(&messagesCmd{}, "")
 	subcommands.Register(&messageCmd{}, "")
 	subcommands.Register(&versionCmd{}, "")
 	subcommands.Register(&uiCmd{}, "")

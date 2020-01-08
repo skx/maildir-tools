@@ -1,24 +1,26 @@
 //
-// Show messages in the given directory
+// Show messages in the given Maildir folder.
 //
 
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
-	"net/mail"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/google/subcommands"
+	"github.com/jhillyerd/enmime"
 )
 
-type messageCmd struct {
+// messageCmd holds the state for this sub-command
+type messagesCmd struct {
 
 	// The prefix to our maildir hierarchy
 	prefix string
@@ -27,12 +29,23 @@ type messageCmd struct {
 	format string
 }
 
+// SingleMessage holds the state for a single message
+type SingleMessage struct {
+
+	// Path contains the path to the file on-disk
+	Path string
+
+	// Rendered contains the rendered result of using
+	// a format-string to output the message.
+	Rendered string
+}
+
 //
 // Glue
 //
-func (*messageCmd) Name() string     { return "messages" }
-func (*messageCmd) Synopsis() string { return "Show the messages in the given directory." }
-func (*messageCmd) Usage() string {
+func (*messagesCmd) Name() string     { return "messages" }
+func (*messagesCmd) Synopsis() string { return "Show the messages in the given directory." }
+func (*messagesCmd) Usage() string {
 	return `messages :
   Show the messages in the specified maildir folder.
 `
@@ -41,7 +54,7 @@ func (*messageCmd) Usage() string {
 //
 // Flag setup
 //
-func (p *messageCmd) SetFlags(f *flag.FlagSet) {
+func (p *messagesCmd) SetFlags(f *flag.FlagSet) {
 	prefix := os.Getenv("HOME") + "/Maildir/"
 
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
@@ -51,7 +64,12 @@ func (p *messageCmd) SetFlags(f *flag.FlagSet) {
 //
 // Show the messages in the given folder
 //
-func (p *messageCmd) showMessages(path string) {
+func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, error) {
+
+	//
+	// The messages we'll find
+	//
+	var messages []SingleMessage
 
 	//
 	// Ensure the maildir exists
@@ -74,31 +92,33 @@ func (p *messageCmd) showMessages(path string) {
 		}
 	}
 	if !found {
-		fmt.Printf("maildir '%s' wasn't found\n", path)
-		return
+		return messages, fmt.Errorf("maildir '%s' wasn't found\n", path)
 	}
 
 	//
-	// Get the files
+	// Build the list of message filenames here.
 	//
 	var files []string
 
-	dirs := []string{"cur", "new", "tmp"}
+	//
+	// Directories we examine beneath the maildir
+	//
+	dirs := []string{"cur", "new"}
 
+	//
+	// For each subdirectory
+	//
 	for _, dir := range dirs {
 
+		// Build up the complete-path
 		prefix := filepath.Join(path, dir)
 
+		// Now record all files
 		_ = filepath.Walk(prefix, func(path string, f os.FileInfo, err error) error {
 			switch mode := f.Mode(); {
 			case mode.IsRegular():
-				// nop
-			default:
-				return nil
+				files = append(files, path)
 			}
-
-			files = append(files, path)
-
 			return nil
 		})
 	}
@@ -113,19 +133,13 @@ func (p *messageCmd) showMessages(path string) {
 		//
 		file, err := os.Open(msg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to open %s: %s\n",
-				msg, err.Error())
-			continue
+			return messages, fmt.Errorf("failed to open %s - %s", path, err.Error())
 		}
 
-		//
-		// Create a mail-object.
-		//
-		m, err := mail.ReadMessage(bufio.NewReader(file))
+		// Parse message body with enmime.
+		env, err := enmime.ReadEnvelope(file)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to read file %s: %s\n",
-				msg, err.Error())
-			continue
+			return messages, err
 		}
 
 		//
@@ -133,9 +147,22 @@ func (p *messageCmd) showMessages(path string) {
 		//
 		file.Close()
 
-		header := m.Header
+		r := regexp.MustCompile("^([0-9]+)(.*)$")
 
+		//
+		// Expand the template-string
+		//
 		headerMapper := func(field string) string {
+
+			padding := ""
+			match := r.FindStringSubmatch(field)
+			if len(match) > 0 {
+				padding = match[1]
+				field = match[2]
+			}
+
+			ret := ""
+
 			switch field {
 			case "flags":
 				//
@@ -154,30 +181,57 @@ func (p *messageCmd) showMessages(path string) {
 
 				s := strings.Split(flags, "")
 				sort.Strings(s)
-				return (strings.Join(s, ""))
+				ret = (strings.Join(s, ""))
 
 			case "file":
-				return msg
+				ret = msg
 			case "index":
-				return fmt.Sprintf("%d", index+1)
+				ret = fmt.Sprintf("%d", index+1)
 			case "total":
-				return fmt.Sprintf("%d", len(files))
+				ret = fmt.Sprintf("%d", len(files))
 			default:
-				return (header.Get(field))
+				ret = env.GetHeader(field)
 			}
+
+			if padding != "" {
+
+				// padding character
+				char := " "
+				if padding[0] == byte('0') {
+					char = "0"
+				}
+
+				// size we need to pad to
+				size, _ := strconv.Atoi(padding)
+				for len(ret) < size {
+					ret = char + ret
+				}
+			}
+			return ret
 		}
 
-		fmt.Println(os.Expand(p.format, headerMapper))
+		messages = append(messages, SingleMessage{Path: msg,
+			Rendered: os.Expand(format, headerMapper)})
 	}
+
+	return messages, nil
 }
 
 //
 // Entry-point.
 //
-func (p *messageCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+func (p *messagesCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 
 	for _, path := range f.Args() {
-		p.showMessages(path)
+
+		messages, err := p.GetMessages(path, p.format)
+		if err != nil {
+			fmt.Printf("%s\n", err.Error())
+			return subcommands.ExitFailure
+		}
+		for _, ent := range messages {
+			fmt.Println(ent.Rendered)
+		}
 	}
 	return subcommands.ExitSuccess
 }

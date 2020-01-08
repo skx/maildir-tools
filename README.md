@@ -8,7 +8,7 @@ This repository contains a simple proof of concept for a different approach towa
 
 > This is basically the motivation and history behind MH-E.
 
-I can imagine a UI which is stateful:
+I can imagine a UI which is nothing more than a bunch of shell-scripts, perhaps using `dialog` to drive them:
 
 * In one state it just runs a shell-command to list folders, and lets you move a cursor up and down.
 * In another state it might just run a shell-command to list messages in the folder you've chosen
@@ -22,17 +22,24 @@ This should be almost trivial to write.  Right?  The hardest part would be handl
 
 # Usage
 
-There are currently three sub-commands:
+There are currently several sub-commands available:
 
 * `maildir-utils maildirs`
   * This lists all your maildir folders, recursively.
 * `maildir-utils messages`
   * This lists the messages inside a folder.
   * Handling the output in a flexible fashion.
+* `maildir-utils message`
+  * This formats and outputs a single message.
+  * If a `text/plain` part is available then display that.
+  * Otherwise use `text/html` if available.
+  * Otherwise no dice.
 * `maildir-utils ui`
   * Toy user-interface that proves we could make something of ourselves.
 
-Both of these default to looking in `~/Maildir` but the `-prefix /path/to/root` will let you change the directory.  Maildirectories are handled recursively, and things are pretty fast but I guess local SSDs help with that.  For everything else there is always the option to cache things.
+With the ability to view folders, message-lists, and a single message we almost have enough to be a functional mail-client.  Albeit one within which you cannot compose, delete, or reply to a message.
+
+Most of the sub-commands default to looking in `~/Maildir` but the `-prefix /path/to/root` will let you change the directory.  Maildirectories are handled recursively, and things are pretty fast but I guess local SSDs help with that.  For everything else there is always the option to cache things.
 
 
 # Sub-Commands
@@ -77,12 +84,12 @@ This is the star of the show!  It allows you to list the messages contained
 within a maildir folder - with a flexible formatting system for output
 
 ```
-$ maildir-utils messages --format '${flags} ${from} ${subject}' debian-packages-ttylog
-S Steve Kemp <skx@debian.org> Bug#553945: Acknowledgement (ttylog: Doesn't test length of device.)
+$ maildir-utils messages --format '[${4flags}] ${from} ${subject}' debian-packages-ttylog
+[    S] Steve Kemp <skx@debian.org> Bug#553945: Acknowledgement (ttylog: Doesn't test length of device.)
 
 ```
 
-Here `${flags}` was replaced by the message flags (`S` in this case), `${from}` with the message sender, etc.
+Here `${4flags}` was replaced by the message flags (`S` in this case), and that was padded to be four bytes long, `${from}` with the message sender, etc.
 
 (You can also use `${file}` to refer to the filename of the message, and other header-values as you would expect.  The other magical values are "`${index}/${total}`" which show the current/total number of entries.)
 
@@ -91,29 +98,31 @@ You can specify either the short-path to the Maildir, beneath the root directory
 
 ## `maildir-utils ui`
 
-This is an __extremely__ minimal UI, which shows a list of maildirs.
+This is an __extremely__ minimal UI, which allows you to navigate:
 
-It works by executing itself, which is suboptimal.
+* When launched you'll be presented with a list of Maildir folders.
+* Scrolling up/down works as expected.
+* Pressing return will open the maildir, replacing the view with a list of messages.
+* Once again scrolling should be responsive and reliable.
+* Finally you can view a message by hitting return within the list.
 
-You can view/scroll the message lists.  `vi` keys work.  As do others.
+In each case you can return to the previous mode/view via `q`, or quit globally via `Q`.  When you're viewing a single message "`J`" and "`K`" move backwards/forwards by one message.
+
+`vi` keys work, as do HOME, END, PAGE UP|DOWN, etc.
+
+
+## `maildir-utils message`
+
+This sub-command outputs a reasonably attractive rendering of a single message.
+
 
 
 
 # TODO
 
-I could decode and display a single message, like so:
-
-```
-$ maildir-utils message /path/to/foo.msg:2,S
-```
-
-Of course how to display attachments is a harder question.  If we had
- a real UI we'd just present a list.  Decoding a message is more useful than
- exec'ing `less`, partly due to MIME and partly due to consistency.
-
-After that a simple command to set-flags (i.e. mark as read/replied).
-
-And exec vi/emacs to compose/reply.
+* We could write a `maildir-utils reply $path` to allow composing a reply to the given message.
+  * That would copy to sent-mail
+  * It would also add the replied-flag to the original message.
 
 
 ## Plan
@@ -121,27 +130,24 @@ And exec vi/emacs to compose/reply.
 * [x] Allow listing maildirs with a format string
   * "`${name} ${unread} ${total}`"
 * [x] Fix `maildir-utils maildirs -unread` to work.
-* [ ] Fix RFC2047-decoding of message-subjects.
+* [x] Fix RFC2047-decoding of message-headers.
 * [ ] Move the prefix-handling to a common-library.
 * [ ] Move the formatting of a message-list to a common-library.
 * [ ] Consider a caching-plan
 * [ ] Consider how threading would be handled, or even sorting of messages.
-* [ ] Consider a message-view
+* [x] Consider a message-view
 * [x] Sketch out a console UI to prove it is even worthwhile, possible.
   * [x] Start with maildir-view
-  * [ ] Then allow message-list-view
-  * [ ] Then message-view
-  * [ ] Modal/Stateful
-  * [ ] Should essentially `exec $self $mode`
+  * [x] Then allow message-list-view
+  * [x] Then message-view
+  * [x] Modal/Stateful
+  * [x] Should essentially `exec $self $mode`
     * [ ] Cache the output to RAM?  File?
     * [ ] When to refresh?
-    * [ ] Display the output.  But modify it
-       * e.g. We can change "/home/skx/Maildir/xxx" to "XXX" in the display
-       * But we want the full-path to know what to enter when the user chooses the directory
-       * Similarly when viewing a message-list we'll need ${file} to know what to view, but we probably don't want to display that on-screen.
+    * [x] Display the output.  But abstract "path" from "format string"
 
 
-Displaying a message will probably be done via a text/template, like so:
+Displaying a message is done via a text/template, like so:
 
 ```
 TO: ${to}

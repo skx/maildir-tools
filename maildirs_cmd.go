@@ -10,12 +10,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/google/subcommands"
 )
 
-type maildirCmd struct {
+type maildirsCmd struct {
 
 	// Show only the short maildir names
 	short bool
@@ -33,9 +36,9 @@ type maildirCmd struct {
 //
 // Glue
 //
-func (*maildirCmd) Name() string     { return "maildirs" }
-func (*maildirCmd) Synopsis() string { return "Show maildir folders beneath the root." }
-func (*maildirCmd) Usage() string {
+func (*maildirsCmd) Name() string     { return "maildirs" }
+func (*maildirsCmd) Synopsis() string { return "Show maildir folders beneath the root." }
+func (*maildirsCmd) Usage() string {
 	return `maildirs :
   Show maildir folders beneath the given root directory, recursively.
 `
@@ -44,20 +47,35 @@ func (*maildirCmd) Usage() string {
 //
 // Flag setup
 //
-func (p *maildirCmd) SetFlags(f *flag.FlagSet) {
+func (p *maildirsCmd) SetFlags(f *flag.FlagSet) {
 
 	prefix := os.Getenv("HOME") + "/Maildir/"
 
 	f.BoolVar(&p.short, "short", false, "Show only the short-name.")
 	f.BoolVar(&p.unreadOnly, "unread", false, "Show only folders containing unread messages.")
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
-	f.StringVar(&p.format, "format", "${unread}/${total} - ${name}", "The format string to display.")
+	f.StringVar(&p.format, "format", "${06unread}/${06total} - ${name}", "The format string to display.")
+}
+
+// Maildir is the type of object we return from our main
+// function.
+type Maildir struct {
+
+	// Path contains the complete path to the maildir.
+	Path string
+
+	// Rendered contains the maildir formated via the
+	// supplied format-string.
+	Rendered string
 }
 
 //
 // Find and display the folders
 //
-func (p *maildirCmd) showMaildirs() {
+func (p *maildirsCmd) GetMaildirs() []Maildir {
+
+	// The results we'll return
+	var results []Maildir
 
 	//
 	// Directories we've found.
@@ -73,19 +91,28 @@ func (p *maildirCmd) showMaildirs() {
 	// Find maildirs
 	//
 	_ = filepath.Walk(p.prefix, func(path string, f os.FileInfo, err error) error {
+
+		// Ignore the new/cur/tmp directories we'll terminate with
+		for _, dir := range dirs {
+			if strings.HasSuffix(path, dir) {
+				return nil
+			}
+		}
+
 		//
-		// Ignore non-directories
+		// Ignore non-directories. (We might might find Dovecot
+		// index-files, etc.)
 		//
-		switch mode := f.Mode(); {
-		case mode.IsDir():
-			// nop
-		default:
+		mode := f.Mode()
+		if !mode.IsDir() {
 			return nil
 		}
 
 		//
 		// Look for `new/`, `cur/`, and `tmp/` subdirectoires
 		// beneath the given directory.
+		//
+		// If any are missing then this is not a maildir.
 		//
 		for _, dir := range dirs {
 			path := filepath.Join(path, dir)
@@ -129,23 +156,52 @@ func (p *maildirCmd) showMaildirs() {
 			unreadCount = unreadMessagesInMaildir(name)
 		}
 
+		r := regexp.MustCompile("^([0-9]+)(.*)$")
+
 		//
 		// Helper for expanding our format-string
 		//
 		mapper := func(field string) string {
+
+			padding := ""
+			match := r.FindStringSubmatch(field)
+			if len(match) > 0 {
+				padding = match[1]
+				field = match[2]
+			}
+
+			ret := ""
+
 			switch field {
 			case "name":
-				return ent
+				ret = ent
 			case "total":
-				return fmt.Sprintf("%d", messagesInMaildir(name))
+				ret = fmt.Sprintf("%d", messagesInMaildir(name))
 			case "unread":
 				if unreadCount < 0 {
 					unreadCount = unreadMessagesInMaildir(name)
 				}
-				return fmt.Sprintf("%d", unreadCount)
+				ret = fmt.Sprintf("%d", unreadCount)
 			default:
-				return "Unknown variable " + field
+				ret = "Unknown variable " + field
 			}
+
+			if padding != "" {
+
+				// padding character
+				char := " "
+				if padding[0] == byte('0') {
+					char = "0"
+				}
+
+				// size we need to pad to
+				size, _ := strconv.Atoi(padding)
+				for len(ret) < size {
+					ret = char + ret
+				}
+			}
+			return ret
+
 		}
 
 		// Are we only showing folders with unread messages?
@@ -154,17 +210,21 @@ func (p *maildirCmd) showMaildirs() {
 			continue
 		}
 
-		// Show the output
-		fmt.Println(os.Expand(p.format, mapper))
-
+		results = append(results, Maildir{Path: name, Rendered: os.Expand(p.format, mapper)})
 	}
+
+	return results
 }
 
 //
 // Entry-point.
 //
-func (p *maildirCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+func (p *maildirsCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 
-	p.showMaildirs()
+	maildirs := p.GetMaildirs()
+	for _, ent := range maildirs {
+		fmt.Println(ent.Rendered)
+	}
+
 	return subcommands.ExitSuccess
 }
