@@ -92,7 +92,7 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 		}
 	}
 	if !found {
-		return messages, fmt.Errorf("maildir '%s' wasn't found\n", path)
+		return messages, fmt.Errorf("maildir '%s' wasn't found", path)
 	}
 
 	//

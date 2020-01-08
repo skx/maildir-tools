@@ -45,12 +45,15 @@ type uiCmd struct {
 
 	// List for a single message
 	emailList *widgets.List
+
+	// Prefix for maildirs
+	prefix string
 }
 
 // getMaildirs returns ALL maildirs
 func (p *uiCmd) getMaildirs() {
 
-	helper := &maildirsCmd{prefix: os.Getenv("HOME") + "/Maildir/",
+	helper := &maildirsCmd{prefix: p.prefix,
 		format: "${06unread}/${06total} - ${name}"}
 	p.maildirs = helper.GetMaildirs()
 
@@ -262,9 +265,7 @@ func (p *uiCmd) showUI() {
 				p.emailList.Rows = []string{}
 
 				// Update the UI with it
-				for _, r := range lines {
-					p.emailList.Rows = append(p.emailList.Rows, r)
-				}
+				p.emailList.Rows = append(p.emailList.Rows, lines...)
 				p.emailList.SelectedRow = 0
 			}
 
@@ -307,9 +308,7 @@ func (p *uiCmd) showUI() {
 					p.emailList.Rows = []string{}
 
 					// Update the UI with it
-					for _, r := range lines {
-						p.emailList.Rows = append(p.emailList.Rows, r)
-					}
+					p.emailList.Rows = append(p.emailList.Rows, lines...)
 					p.emailList.SelectedRow = 0
 				}
 			}
@@ -325,9 +324,7 @@ func (p *uiCmd) showUI() {
 					p.emailList.Rows = []string{}
 
 					// Update the UI with it
-					for _, r := range lines {
-						p.emailList.Rows = append(p.emailList.Rows, r)
-					}
+					p.emailList.Rows = append(p.emailList.Rows, lines...)
 					p.emailList.SelectedRow = 0
 
 				}
@@ -363,6 +360,8 @@ func (*uiCmd) Usage() string {
 // Flag setup
 //
 func (p *uiCmd) SetFlags(f *flag.FlagSet) {
+	prefix := os.Getenv("HOME") + "/Maildir/"
+	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
 }
 
 //
