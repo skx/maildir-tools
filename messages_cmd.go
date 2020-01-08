@@ -11,9 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/google/subcommands"
 	"github.com/jhillyerd/enmime"
@@ -38,6 +40,8 @@ type SingleMessage struct {
 	// Rendered contains the rendered result of using
 	// a format-string to output the message.
 	Rendered string
+
+	err error
 }
 
 //
@@ -59,6 +63,116 @@ func (p *messagesCmd) SetFlags(f *flag.FlagSet) {
 
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
 	f.StringVar(&p.format, "format", "[${index}/${total} - ${flags}] ${subject}", "Specify the format-string to use for the message-display")
+}
+
+///
+// worker stuff
+///
+
+type job struct {
+	index int
+	total int
+	path  string
+}
+
+func (p *messagesCmd) worker(jobs <-chan job, results chan<- SingleMessage) {
+	for j := range jobs {
+
+		var t SingleMessage
+
+		msg := j.path
+		index := j.index
+		total := j.total
+
+		file, err := os.Open(msg)
+		if err != nil {
+			t.err = err
+			results <- t
+			continue
+		}
+
+		// Parse message body with enmime.
+		env, err := enmime.ReadEnvelope(file)
+		if err != nil {
+			t.err = err
+			results <- t
+			continue
+		}
+
+		//
+		// Ensure we don't leak.
+		//
+		file.Close()
+
+		r := regexp.MustCompile("^([0-9]+)(.*)$")
+
+		//
+		// Expand the template-string
+		//
+		headerMapper := func(field string) string {
+
+			padding := ""
+			match := r.FindStringSubmatch(field)
+			if len(match) > 0 {
+				padding = match[1]
+				field = match[2]
+			}
+
+			ret := ""
+
+			switch field {
+			case "flags":
+				//
+				flags := ""
+
+				// get the flags
+				i := strings.Index(msg, ":2,")
+				if i > 0 {
+					flags = msg[i+3:]
+				}
+
+				// Add on a fake (N)ew flag
+				if strings.Contains(msg, "/new/") {
+					flags += "N"
+				}
+
+				s := strings.Split(flags, "")
+				sort.Strings(s)
+				ret = (strings.Join(s, ""))
+
+			case "file":
+				ret = msg
+			case "index":
+				ret = fmt.Sprintf("%d", index+1)
+			case "total":
+				ret = fmt.Sprintf("%d", total)
+			default:
+				ret = env.GetHeader(field)
+			}
+
+			if padding != "" {
+
+				// padding character
+				char := " "
+				if padding[0] == byte('0') {
+					char = "0"
+				}
+
+				// size we need to pad to
+				size, _ := strconv.Atoi(padding)
+				for len(ret) < size {
+					ret = char + ret
+				}
+			}
+			return ret
+		}
+
+		ret := SingleMessage{Path: j.path,
+			Rendered: os.Expand(p.format, headerMapper)}
+
+		// do some work
+		results <- ret
+	}
 }
 
 //
@@ -124,94 +238,54 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 	}
 
 	//
-	// For each file - parse the email message and output a summary.
+	// We now have a bunch of filenames we need to read/parse
+	// do it in parallel.
 	//
-	for index, msg := range files {
+	// ugh
+	//
+	jobs := make(chan job, len(files))
+	results := make(chan SingleMessage, len(files))
 
-		//
-		// Open it
-		//
-		file, err := os.Open(msg)
-		if err != nil {
-			return messages, fmt.Errorf("failed to open %s - %s", path, err.Error())
+	//
+	// spin up workers and use a sync.WaitGroup to indicate completion
+	//
+	// We'll assume two jobs for each CPU.  Yeah.
+	//
+	var wg sync.WaitGroup
+	wg.Add(2 * runtime.NumCPU())
+	for i := 0; i < 2*runtime.NumCPU(); i++ {
+		go func() {
+			defer wg.Done()
+			p.worker(jobs, results)
+		}()
+	}
+
+	//
+	// wait on the workers to finish and close the result channel
+	// to signal downstream that all work is done
+	//
+	go func() {
+		defer close(results)
+		wg.Wait()
+	}()
+
+	//
+	// Send each of our jobs.
+	//
+	go func() {
+		defer close(jobs)
+		for i, e := range files {
+			j := job{index: i, total: len(files), path: e}
+			jobs <- j
 		}
+	}()
 
-		// Parse message body with enmime.
-		env, err := enmime.ReadEnvelope(file)
-		if err != nil {
-			return messages, err
-		}
-
-		//
-		// Ensure we don't leak.
-		//
-		file.Close()
-
-		r := regexp.MustCompile("^([0-9]+)(.*)$")
-
-		//
-		// Expand the template-string
-		//
-		headerMapper := func(field string) string {
-
-			padding := ""
-			match := r.FindStringSubmatch(field)
-			if len(match) > 0 {
-				padding = match[1]
-				field = match[2]
-			}
-
-			ret := ""
-
-			switch field {
-			case "flags":
-				//
-				flags := ""
-
-				// get the flags
-				i := strings.Index(msg, ":2,")
-				if i > 0 {
-					flags = msg[i+3:]
-				}
-
-				// Add on a fake (N)ew flag
-				if strings.Contains(msg, "/new/") {
-					flags += "N"
-				}
-
-				s := strings.Split(flags, "")
-				sort.Strings(s)
-				ret = (strings.Join(s, ""))
-
-			case "file":
-				ret = msg
-			case "index":
-				ret = fmt.Sprintf("%d", index+1)
-			case "total":
-				ret = fmt.Sprintf("%d", len(files))
-			default:
-				ret = env.GetHeader(field)
-			}
-
-			if padding != "" {
-
-				// padding character
-				char := " "
-				if padding[0] == byte('0') {
-					char = "0"
-				}
-
-				// size we need to pad to
-				size, _ := strconv.Atoi(padding)
-				for len(ret) < size {
-					ret = char + ret
-				}
-			}
-			return ret
-		}
-
-		messages = append(messages, SingleMessage{Path: msg,
-			Rendered: os.Expand(format, headerMapper)})
+	// read all the results
+	c := 0
+	for r := range results {
+		fmt.Printf("%s\n", r.Rendered)
+		c++
+		messages = append(messages, r)
 	}
 
 	return messages, nil
