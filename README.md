@@ -37,8 +37,8 @@ There are currently several sub-commands available:
 * `maildir-utils message`
   * This formats and outputs a single message.
   * If a `text/plain` part is available then display that.
-  * Otherwise use `text/html` if available.
-  * Otherwise no dice.
+     * Otherwise use `text/html` if that is available.
+     * Otherwise no dice.
 * `maildir-utils ui`
   * Toy user-interface that proves we could make something of ourselves.
 
@@ -100,6 +100,11 @@ Here `${4flags}` was replaced by the message flags (`S` in this case), and that 
 
 You can specify either the short-path to the Maildir, beneath the root directory, or the complete path `/home/skx/Maildir/people-foo`, depending upon your preference.
 
+* I recently switched to a new MIME library, it is slow.
+* Takes 20-25 seconds to open a maildir with 40,000 messages.
+  * This means I need caching, or need a faster MIME-aware mail-library.
+  * Pointers welcome.  Patches even more welcome.
+
 
 ## `maildir-utils ui`
 
@@ -126,8 +131,13 @@ This sub-command outputs a reasonably attractive rendering of a single message.
 # TODO
 
 * We could write a `maildir-utils reply $path` to allow composing a reply to the given message.
-  * That would copy to sent-mail
+  * That would copy to sent-mail.
+    * Which implies we need a config file.
   * It would also add the replied-flag to the original message.
+
+Right now things are a bit hacky, but it would be possible to cleanup the implementation a fair bit and I will do that even if I do no further work.
+
+Patches / Comments / Suggestions are most welcome, if this is even slightly itneresting to you.
 
 
 ## Plan
