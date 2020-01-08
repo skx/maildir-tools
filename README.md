@@ -1,3 +1,8 @@
+
+Quick demo of UI:
+
+* https://asciinema.org/a/FXjgOsnwjVu0lB5znx8EwRVWF
+
 # maildir-utils
 
 In the past I've written a couple of console-based email clients, and I always found the user-interface the hardest part.
