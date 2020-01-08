@@ -3,6 +3,18 @@ Quick demo of UI:
 
 * https://asciinema.org/a/FXjgOsnwjVu0lB5znx8EwRVWF
 
+
+* [maildir-utils](#maildir-utils)
+* [Usage](#usage)
+* [Sub-Commands](#sub-commands)
+  * [maildir-utils maildirs](#maildir-utils-maildirs)
+  * [maildir-utils messages](#maildir-utils-messages)
+  * [maildir-utils message](#maildir-utils-message)
+  * [maildir-utils ui](#maildir-utils-ui)
+* [TODO](#todo)
+  * [Plan](#plan)
+
+
 # maildir-utils
 
 In the past I've written a couple of console-based email clients, and I always found the user-interface the hardest part.
