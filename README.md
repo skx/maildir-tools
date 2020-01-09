@@ -1,8 +1,14 @@
 
-Quick demo of UI:
+This repository contains a simple golang utility which can be used for two purposes:
 
-* https://asciinema.org/a/FXjgOsnwjVu0lB5znx8EwRVWF
+* To perform simple script operations against Maildir hierarchies.
+* To provide a simple, console-based, email-client.
+  * Albeit a basic one that only allows reading/viewing maildirs/messages.
 
+There is a [demo of mail-client UI](https://asciinema.org/a/FXjgOsnwjVu0lB5znx8EwRVWF), but the focus at the moment is upon improving the scripting facilities.
+
+
+# Contents
 
 * [maildir-tools](#maildir-tools)
 * [Installation](#installation)
@@ -33,10 +39,14 @@ I can imagine a UI which is nothing more than a bunch of shell-scripts, perhaps 
 
 This should be almost trivial to write.  Right?  The hardest part would be handling the sorting of messages into threads, etc.
 
+The driving force behind this repository is currently the ability to provide the primitives that a simple UI would need - and as a side-effect provide a useful tool for working with Maildir hierarchies.
+
+It might be that, over time, a console-based mail-client is built, but that is a secondary focus.  I personally have thousands of email messages in a deeply nested Maildir hierarchy and even being able to dump, script, and view messages in a flexible fashion is useful.  Of course I have written email clients (plural) in the past so it is tempting to try again, but I can appreciate that gaining users is hard and the job is always bigger than expected.
+
 
 # Installation
 
-To install the latest binary from source you can use the standard golang-approach:
+To install from source you can use the standard golang-approach:
 
 ```
 $ go get github.com/skx/maildir-tools/cmd/maildir-tools
@@ -53,15 +63,15 @@ In the future, after we've had our first release, you will be able to download b
 There are currently several sub-commands available:
 
 * `maildir-tools maildirs`
-  * This lists all your maildir folders, recursively.
-* `maildir-tools messages`
+  * This command lists all your maildir folders, recursively.
+* `maildir-tools messages $folder1 $folder2 .. $folderN`
   * This lists the messages inside a folder.
   * Handling the output in a flexible fashion.
-* `maildir-tools message`
-  * This formats and outputs a single message.
-  * If a `text/plain` part is available then display that.
-     * Otherwise use `text/html` if that is available.
-     * Otherwise no dice.
+* `maildir-tools message $file`
+  * This formats and displays a single message.
+  * If a `text/plain` part is available then that is displayed.
+     * Otherwise any available `text/html` part is used.
+        *  If neither are available nothing is shown.
 * `maildir-tools ui`
   * Toy user-interface that proves we could make something of ourselves.
 
@@ -70,11 +80,10 @@ With the ability to view folders, message-lists, and a single message we almost 
 Most of the sub-commands default to looking in `~/Maildir` but the `-prefix /path/to/root` will let you change the directory.  Maildirectories are handled recursively, and things are pretty fast but I guess local SSDs help with that.  For everything else there is always the option to cache things.
 
 
+
 # Sub-Commands
 
-This is a simple proof of concept, it might become more useful, it might become abandoned.
-
-Currently this project will build a single monolithic binary with a couple of sub-commands, run with no arguments to see usage information.
+Currently this project will build a single monolithic binary with a couple of sub-commands, run it with no arguments to see usage information.
 
 
 ## `maildir-tools maildirs`
@@ -104,10 +113,9 @@ Flags can be used to refine the output, for example:
   * Only show maildirs containing unread messages.
 
 
-## `maildir-tools messages`
+## `maildir-tools messages $folder1 $folder2 .. $folderN`
 
-This is the star of the show!  It allows you to list the messages contained
-within a maildir folder - with a flexible formatting system for output
+This sub-command allows you to list the messages contained within a maildir folder with a flexible formatting system for output
 
 ```
 $ maildir-tools messages --format '[${4flags}] ${from} ${subject}' debian-packages-ttylog
