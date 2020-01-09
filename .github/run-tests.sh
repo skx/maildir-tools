@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Make sure we're in the right place
+cd cmd/maildir-utils/
+
 # This will allow the linter to be installed.  All a mess.
 rm go.mod
 
