@@ -4,36 +4,47 @@ Quick demo of UI:
 * https://asciinema.org/a/FXjgOsnwjVu0lB5znx8EwRVWF
 
 
-* [maildir-utils](#maildir-utils)
+* [maildir-utils](#maildir-tools)
+* [Installation](#installation)
 * [Usage](#usage)
 * [Sub-Commands](#sub-commands)
   * [maildir-utils maildirs](#maildir-utils-maildirs)
   * [maildir-utils messages](#maildir-utils-messages)
   * [maildir-utils message](#maildir-utils-message)
   * [maildir-utils ui](#maildir-utils-ui)
-* [TODO](#todo)
-  * [Plan](#plan)
 
 
-# maildir-utils
+# maildir-tools
 
 In the past I've written a couple of console-based email clients, and I always found the user-interface the hardest part.
 
 This repository contains a simple proof of concept for a different approach towards email clients:
 
 * Instead of a monolithic "mail-client" why not compose one from pieces?
-
-> This is basically the motivation and history behind MH-E.
+  * This is basically the motivation and history behind [MH](https://en.wikipedia.org/wiki/MH_Message_Handling_System)
 
 I can imagine a UI which is nothing more than a bunch of shell-scripts, perhaps using `dialog` to drive them:
 
-* In one state it just runs a shell-command to list folders, and lets you move a cursor up and down.
-* In another state it might just run a shell-command to list messages in the folder you've chosen
-  * And allow you to move the cursor up and down.
-* In the final state it might just run a shell-command to display a message.
+* In one state it just runs a shell-command to list folders, and lets you move a cursor up and down to enter one.
+* In another state it might just run a shell-command to list messages in the folder you've chosen.
+  * Again you may move the cursor up and down, and select a message.
+* In the final state a shell-command might be executed to display a message.
   * And allow you to hit keys to mark read, reply, etc.
 
 This should be almost trivial to write.  Right?  The hardest part would be handling the sorting of messages into threads, etc.
+
+
+# Installation
+
+To install the latest binary from source you can use the standard golang-approach:
+
+```
+$ go get github.com/skx/maildir-tools/cmd/maildir-tools
+```
+
+(If you have the source-repository cloned locally run `cd cmd/maildir-tools && go install .`)
+
+In the future, after we've had our first release, you will be able to download binaries instead.
 
 
 
@@ -87,8 +98,6 @@ $ maildir-utils maildirs --format '${name}' | grep debian-packages
 
 Flags can be used to refine the output, for example:
 
-* `-short` to view only the name of the maildir itself
-  * e.g. "debian-packages", "debian-packages-abiword", etc.
 * `-format '${unread} ${total} ${name}'`
   * To specify what is output.
 * `-unread`
@@ -136,56 +145,3 @@ In each case you can return to the previous mode/view via `q`, or quit globally 
 ## `maildir-utils message`
 
 This sub-command outputs a reasonably attractive rendering of a single message.
-
-
-
-
-# TODO
-
-* We could write a `maildir-utils reply $path` to allow composing a reply to the given message.
-  * That would copy to sent-mail.
-    * Which implies we need a config file.
-  * It would also add the replied-flag to the original message.
-
-Right now things are a bit hacky, but it would be possible to cleanup the implementation a fair bit and I will do that even if I do no further work.
-
-Patches / Comments / Suggestions are most welcome, if this is even slightly itneresting to you.
-
-
-## Plan
-
-* [x] Allow listing maildirs with a format string
-  * "`${name} ${unread} ${total}`"
-* [x] Fix `maildir-utils maildirs -unread` to work.
-* [x] Fix RFC2047-decoding of message-headers.
-* [ ] Move the prefix-handling to a common-library.
-* [ ] Move the formatting of a message-list to a common-library.
-* [ ] Consider a caching-plan
-* [ ] Consider how threading would be handled, or even sorting of messages.
-* [x] Consider a message-view
-* [x] Sketch out a console UI to prove it is even worthwhile, possible.
-  * [x] Start with maildir-view
-  * [x] Then allow message-list-view
-  * [x] Then message-view
-  * [x] Modal/Stateful
-  * [x] Should essentially `exec $self $mode`
-    * [ ] Cache the output to RAM?  File?
-    * [ ] When to refresh?
-    * [x] Display the output.  But abstract "path" from "format string"
-
-
-Displaying a message is done via a text/template, like so:
-
-```
-TO: ${to}
-From:${from}
-Subject: ${subject}
-Date: ${date}
-Flags: ${flags}
-
-${Body:Text}
-${Attachment-Names}
-```
-
-But we'll need to allow the user to specify their own, and allow arbitrary
-header values to be shown.  Or even toggled.
