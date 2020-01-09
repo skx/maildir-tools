@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/subcommands"
 	"github.com/jhillyerd/enmime"
+	"github.com/skx/maildir-utils/finder"
 )
 
 // messageCmd holds the state for this sub-command
@@ -95,33 +96,8 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 		return messages, fmt.Errorf("maildir '%s' wasn't found", path)
 	}
 
-	//
-	// Build the list of message filenames here.
-	//
-	var files []string
-
-	//
-	// Directories we examine beneath the maildir
-	//
-	dirs := []string{"cur", "new"}
-
-	//
-	// For each subdirectory
-	//
-	for _, dir := range dirs {
-
-		// Build up the complete-path
-		prefix := filepath.Join(path, dir)
-
-		// Now record all files
-		_ = filepath.Walk(prefix, func(path string, f os.FileInfo, err error) error {
-			switch mode := f.Mode(); {
-			case mode.IsRegular():
-				files = append(files, path)
-			}
-			return nil
-		})
-	}
+	finder := finder.New(p.prefix)
+	files := finder.Messages(path)
 
 	//
 	// For each file - parse the email message and output a summary.

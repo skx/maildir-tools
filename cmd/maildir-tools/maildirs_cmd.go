@@ -9,19 +9,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/google/subcommands"
+	"github.com/skx/maildir-utils/finder"
 )
 
 type maildirsCmd struct {
-
-	// Show only the short maildir names
-	short bool
 
 	// Show only folders with unread mail?
 	unreadOnly bool
@@ -51,7 +48,6 @@ func (p *maildirsCmd) SetFlags(f *flag.FlagSet) {
 
 	prefix := os.Getenv("HOME") + "/Maildir/"
 
-	f.BoolVar(&p.short, "short", false, "Show only the short-name.")
 	f.BoolVar(&p.unreadOnly, "unread", false, "Show only folders containing unread messages.")
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
 	f.StringVar(&p.format, "format", "${06unread}/${06total} - ${name}", "The format string to display.")
@@ -74,59 +70,17 @@ type Maildir struct {
 //
 func (p *maildirsCmd) GetMaildirs() []Maildir {
 
+	//
 	// The results we'll return
+	//
 	var results []Maildir
 
 	//
-	// Directories we've found.
+	// Find the maildir entries beneath our
+	// prefix directory.
 	//
-	maildirs := []string{}
-
-	//
-	// Subdirectories we care about
-	//
-	dirs := []string{"cur", "new", "tmp"}
-
-	//
-	// Find maildirs
-	//
-	_ = filepath.Walk(p.prefix, func(path string, f os.FileInfo, err error) error {
-
-		// Ignore the new/cur/tmp directories we'll terminate with
-		for _, dir := range dirs {
-			if strings.HasSuffix(path, dir) {
-				return nil
-			}
-		}
-
-		//
-		// Ignore non-directories. (We might might find Dovecot
-		// index-files, etc.)
-		//
-		mode := f.Mode()
-		if !mode.IsDir() {
-			return nil
-		}
-
-		//
-		// Look for `new/`, `cur/`, and `tmp/` subdirectoires
-		// beneath the given directory.
-		//
-		// If any are missing then this is not a maildir.
-		//
-		for _, dir := range dirs {
-			path = filepath.Join(path, dir)
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				return nil
-			}
-		}
-
-		//
-		// Found a positive result
-		//
-		maildirs = append(maildirs, path)
-		return nil
-	})
+	finder := finder.New(p.prefix)
+	maildirs := finder.Maildirs()
 
 	//
 	// Sorted results are nicer.
@@ -134,7 +88,18 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 	sort.Strings(maildirs)
 
 	//
-	// Show the results
+	// Do we need to count files?
+	//
+	count := false
+	if strings.Contains(p.format, "total}") ||
+		strings.Contains(p.format, "unread}") ||
+		p.unreadOnly {
+		count = true
+	}
+
+	//
+	// Build up the formatted results, according to
+	// our formatted string.
 	//
 	for _, ent := range maildirs {
 
@@ -143,19 +108,26 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 		//
 		name := ent
 
-		if p.short {
-			ent = ent[len(p.prefix):]
-		}
+		//
+		// Count of unread and total messages in the
+		// maildir.  These might not be used.
+		//
+		unread := 0
+		total := 0
 
 		//
-		// Unread-cache
+		// Count files if we're supposed to
 		//
-		unreadCount := -1
+		if count {
+			messages := finder.Messages(name)
+			total = len(messages)
 
-		if p.unreadOnly {
-			unreadCount = unreadMessagesInMaildir(name)
+			for _, entry := range messages {
+				if strings.Contains(entry, "/new/") {
+					unread++
+				}
+			}
 		}
-
 		r := regexp.MustCompile("^([0-9]+)(.*)$")
 
 		//
@@ -175,13 +147,12 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 			switch field {
 			case "name":
 				ret = ent
+			case "shortname":
+				ret = ent[len(p.prefix):]
 			case "total":
-				ret = fmt.Sprintf("%d", messagesInMaildir(name))
+				ret = fmt.Sprintf("%d", total)
 			case "unread":
-				if unreadCount < 0 {
-					unreadCount = unreadMessagesInMaildir(name)
-				}
-				ret = fmt.Sprintf("%d", unreadCount)
+				ret = fmt.Sprintf("%d", unread)
 			default:
 				ret = "Unknown variable " + field
 			}
@@ -206,7 +177,7 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 
 		// Are we only showing folders with unread messages?
 		// If so continue unless this qualifies
-		if p.unreadOnly && unreadCount < 1 {
+		if p.unreadOnly && unread < 1 {
 			continue
 		}
 
