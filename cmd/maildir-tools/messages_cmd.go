@@ -17,7 +17,7 @@ import (
 
 	"github.com/google/subcommands"
 	"github.com/jhillyerd/enmime"
-	"github.com/skx/maildir-utils/finder"
+	"github.com/skx/maildir-tools/finder"
 )
 
 // messageCmd holds the state for this sub-command

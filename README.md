@@ -4,14 +4,14 @@ Quick demo of UI:
 * https://asciinema.org/a/FXjgOsnwjVu0lB5znx8EwRVWF
 
 
-* [maildir-utils](#maildir-tools)
+* [maildir-tools](#maildir-tools)
 * [Installation](#installation)
 * [Usage](#usage)
 * [Sub-Commands](#sub-commands)
-  * [maildir-utils maildirs](#maildir-utils-maildirs)
-  * [maildir-utils messages](#maildir-utils-messages)
-  * [maildir-utils message](#maildir-utils-message)
-  * [maildir-utils ui](#maildir-utils-ui)
+  * [maildir-tools maildirs](#maildir-tools-maildirs)
+  * [maildir-tools messages](#maildir-tools-messages)
+  * [maildir-tools message](#maildir-tools-message)
+  * [maildir-tools ui](#maildir-tools-ui)
 
 
 # maildir-tools
@@ -52,17 +52,17 @@ In the future, after we've had our first release, you will be able to download b
 
 There are currently several sub-commands available:
 
-* `maildir-utils maildirs`
+* `maildir-tools maildirs`
   * This lists all your maildir folders, recursively.
-* `maildir-utils messages`
+* `maildir-tools messages`
   * This lists the messages inside a folder.
   * Handling the output in a flexible fashion.
-* `maildir-utils message`
+* `maildir-tools message`
   * This formats and outputs a single message.
   * If a `text/plain` part is available then display that.
      * Otherwise use `text/html` if that is available.
      * Otherwise no dice.
-* `maildir-utils ui`
+* `maildir-tools ui`
   * Toy user-interface that proves we could make something of ourselves.
 
 With the ability to view folders, message-lists, and a single message we almost have enough to be a functional mail-client.  Albeit one within which you cannot compose, delete, or reply to a message.
@@ -77,12 +77,12 @@ This is a simple proof of concept, it might become more useful, it might become 
 Currently this project will build a single monolithic binary with a couple of sub-commands, run with no arguments to see usage information.
 
 
-## `maildir-utils maildirs`
+## `maildir-tools maildirs`
 
 This will output a list of maildir directories, by default showing the complete path of each maildir which was found.
 
 ```
-$ maildir-utils maildirs --format '${name}' | grep debian-packages
+$ maildir-tools maildirs --format '${name}' | grep debian-packages
 /home/skx/Maildir/debian-packages
 /home/skx/Maildir/debian-packages-Pkg-javascript-devel
 /home/skx/Maildir/debian-packages-aatv
@@ -104,13 +104,13 @@ Flags can be used to refine the output, for example:
   * Only show maildirs containing unread messages.
 
 
-## `maildir-utils messages`
+## `maildir-tools messages`
 
 This is the star of the show!  It allows you to list the messages contained
 within a maildir folder - with a flexible formatting system for output
 
 ```
-$ maildir-utils messages --format '[${4flags}] ${from} ${subject}' debian-packages-ttylog
+$ maildir-tools messages --format '[${4flags}] ${from} ${subject}' debian-packages-ttylog
 [    S] Steve Kemp <skx@debian.org> Bug#553945: Acknowledgement (ttylog: Doesn't test length of device.)
 
 ```
@@ -127,7 +127,7 @@ You can specify either the short-path to the Maildir, beneath the root directory
   * Pointers welcome.  Patches even more welcome.
 
 
-## `maildir-utils ui`
+## `maildir-tools ui`
 
 This is an __extremely__ minimal UI, which allows you to navigate:
 
@@ -142,6 +142,6 @@ In each case you can return to the previous mode/view via `q`, or quit globally 
 `vi` keys work, as do HOME, END, PAGE UP|DOWN, etc.
 
 
-## `maildir-utils message`
+## `maildir-tools message`
 
 This sub-command outputs a reasonably attractive rendering of a single message.

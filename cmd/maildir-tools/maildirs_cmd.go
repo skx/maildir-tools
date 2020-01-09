@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/google/subcommands"
-	"github.com/skx/maildir-utils/finder"
+	"github.com/skx/maildir-tools/finder"
 )
 
 type maildirsCmd struct {
