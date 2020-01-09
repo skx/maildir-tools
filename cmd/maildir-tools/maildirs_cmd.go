@@ -115,7 +115,7 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 		// If any are missing then this is not a maildir.
 		//
 		for _, dir := range dirs {
-			path := filepath.Join(path, dir)
+			path = filepath.Join(path, dir)
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				return nil
 			}
