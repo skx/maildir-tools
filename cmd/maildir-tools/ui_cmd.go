@@ -28,25 +28,23 @@ type uiCmd struct {
 	// Current mode.
 	mode string
 
-	// List for maildir-entries
+	// List for maildir-entries.
 	maildirList *widgets.List
 
-	// The actual maildirs we have
+	// The actual maildirs we have found, which are being displayed.
 	maildirs []Maildir
 
-	// The currently selected maildir
-	curMaildir string
-
-	// List for message-entries
+	// List for message-entries.
 	messageList *widgets.List
 
-	// The actual messages in the directory
+	// The actual messages in the currently-selected maildir,
+	// which are being displayed.
 	messages []SingleMessage
 
-	// List for a single message
+	// List for displaying a single message.
 	emailList *widgets.List
 
-	// Prefix for maildirs
+	// Prefix for our maildir hierarchy
 	prefix string
 }
 
@@ -62,11 +60,14 @@ func (p *uiCmd) getMaildirs() {
 // getMessages gets the messages in the currently selected maildir
 func (p *uiCmd) getMessages() {
 
+	// Get the selected folder
+	curMaildir := p.maildirs[p.maildirList.SelectedRow].Path
+
 	// The messages are empty now
 	p.messages = []SingleMessage{}
 
 	// No directory?  That's a bug really
-	if p.curMaildir == "" {
+	if curMaildir == "" {
 		return
 	}
 
@@ -76,7 +77,7 @@ func (p *uiCmd) getMessages() {
 	//
 	helper := &messagesCmd{}
 	var err error
-	p.messages, err = helper.GetMessages(p.curMaildir, "[${06index}/${06total} [${4flags}] ${subject}")
+	p.messages, err = helper.GetMessages(curMaildir, "[${06index}/${06total} [${4flags}] ${subject}")
 	if err != nil {
 		ui.Close()
 		panic(err)
@@ -274,7 +275,7 @@ func (p *uiCmd) showUI() {
 
 				// Get folder to view.
 				offset := p.maildirList.SelectedRow
-				p.curMaildir = p.maildirs[offset].Path
+				folder := p.maildirs[offset].Path
 
 				p.mode = "messages"
 				widget = p.messageList
@@ -288,7 +289,7 @@ func (p *uiCmd) showUI() {
 				for _, r := range p.messages {
 					p.messageList.Rows = append(p.messageList.Rows, r.Rendered)
 				}
-				widget.Title = "messages:" + p.curMaildir
+				widget.Title = "messages:" + folder
 				p.messageList.SelectedRow = 0
 			}
 
