@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Install tools to test our code-quality.
+go get -u golang.org/x/lint/golint
+
 # Failures cause aborts
 set -e
 
