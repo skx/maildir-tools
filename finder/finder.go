@@ -33,22 +33,20 @@ func New(prefix string) *Finder {
 // We exclude non-files, and ignore $path/tmp/.
 func (f *Finder) Messages(path string) []string {
 
-	// TODO use a struct
-	//    filename string
-	//    info os.FileInfo
+	// We want to sort the files by age.
 	//
-	//Then we can sort them like so:
+	// Calling stat is expensive, but the appropriate
+	// details are already retrieved by our filesystem
+	// walker - so we store them alongside the names
+	// as we receive them.
 	//
-	// sort.Slice(files, func(i,j int) bool{
-	//	return files[i].ModTime().Unix() < files[j].ModTime().Unix()
-	// })
-	//
-	// Doing this is better than getting all the info a second
-	// time, once we've found the filenames
-	//
+	type MessageInfo struct {
+		path string
+		info os.FileInfo
+	}
 
-	// Build the list of message filenames here.
-	var files []string
+	// The holder for the messages we find.
+	var files []MessageInfo
 
 	// Directories we examine beneath the maildir
 	dirs := []string{"cur", "new"}
@@ -65,14 +63,26 @@ func (f *Finder) Messages(path string) []string {
 			// We only care about files
 			mode := f.Mode()
 			if mode.IsRegular() {
-				files = append(files, path)
+				files = append(files, MessageInfo{path: path, info: f})
 			}
 
 			return nil
 		})
 	}
 
-	return files
+	// Sort the files
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].info.ModTime().Unix() < files[j].info.ModTime().Unix()
+	})
+
+	// Now build up a return value of just the filenames,
+	// which have been sorted by modification time.
+	ret := make([]string, len(files))
+	for i, e := range files {
+		ret[i] = e.path
+	}
+
+	return ret
 }
 
 // Maildirs returns the list of Maildir folders beneath our prefix.
