@@ -7,6 +7,7 @@ package formatter
 import (
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -15,10 +16,23 @@ var (
 
 	// Length specifies the field-length.
 	length = regexp.MustCompile("^([0-9]+)(.*)$")
+
+	// Mail gets an email address from a field
+	emailRE = regexp.MustCompile(".*?(<.*>)$")
+
+	// Mail gets an email address from a field
+	nameRE = regexp.MustCompile("^\"(.*)\".*<.*>$")
 )
 
 // Expand replaces ${var} or $var in the string based on the mapping function.
 func Expand(format string, mapping func(string) string) string {
+
+	// For email we allow "to.name" or "#{to.email}" to
+	// return just the part of the matching field.
+	//
+	// That goes for Cc too, and all other fields.
+	name := false
+	email := false
 
 	out := ""
 
@@ -29,9 +43,7 @@ func Expand(format string, mapping func(string) string) string {
 		// Get the field-name we should interpolate.
 		field := match[2]
 
-		//
 		// Look for a padding/truncation setup.
-		//
 		padding := ""
 		pMatches := length.FindStringSubmatch(field)
 		if len(pMatches) > 0 {
@@ -39,11 +51,34 @@ func Expand(format string, mapping func(string) string) string {
 			field = pMatches[2]
 		}
 
+		// Email-specific modifiers?
+		if strings.HasSuffix(field, ".name") {
+			name = true
+			field = strings.TrimSuffix(field, ".name")
+		}
+		if strings.HasSuffix(field, ".email") {
+			email = true
+			field = strings.TrimSuffix(field, ".email")
+		}
+
 		// Add the prefix
 		out += match[1]
 
 		// Get the field-value, via the callback
 		output := mapping(field)
+
+		if email {
+			eMatches := emailRE.FindStringSubmatch(output)
+			if len(eMatches) == 2 {
+				output = eMatches[1]
+			}
+		}
+		if name {
+			nMatches := nameRE.FindStringSubmatch(output)
+			if len(nMatches) == 2 {
+				output = nMatches[1]
+			}
+		}
 
 		if padding != "" {
 
@@ -70,10 +105,10 @@ func Expand(format string, mapping func(string) string) string {
 
 		// Move on.
 		format = match[3]
-
 		match = helper.FindStringSubmatch(format)
 	}
 
-	// Add on the format-string if it didn't match.
+	// Add on the format-string if it didn't match,
+	// or any trailing suffix if it did.
 	return out + format
 }

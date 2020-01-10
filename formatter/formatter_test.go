@@ -55,3 +55,53 @@ func TestTruncation(t *testing.T) {
 		t.Errorf("Got unexpected output:" + out)
 	}
 }
+
+func TestName(t *testing.T) {
+
+	mapper := func(placeholderName string) string {
+		switch placeholderName {
+		case "NAME1":
+			return "\"Steve\"<steve@steve.fi>"
+		case "NAME2":
+			return "\"Steve Kemp\"    <steve@steve.fi>"
+		}
+		return ""
+	}
+
+	out := Expand("#{NAME1.name}", mapper)
+	if out != "Steve" {
+		t.Errorf("Got unexpected output:" + out)
+	}
+	out = Expand("#{NAME2.name}", mapper)
+	if out != "Steve Kemp" {
+		t.Errorf("Got unexpected output:" + out)
+	}
+}
+
+func TestEmail(t *testing.T) {
+
+	mapper := func(placeholderName string) string {
+		switch placeholderName {
+		case "NAME":
+			return "\"Steve\"<steve@steve.fi>"
+		case "TEST":
+			return "<steve@steve.fi>"
+		case "TEST2":
+			return "steve@steve.fi"
+		}
+		return ""
+	}
+
+	out := Expand("#{NAME.email}", mapper)
+	if out != "<steve@steve.fi>" {
+		t.Errorf("Got unexpected output:" + out)
+	}
+	out = Expand("#{TEST.email}", mapper)
+	if out != "<steve@steve.fi>" {
+		t.Errorf("Got unexpected output:" + out)
+	}
+	out = Expand("#{TEST2.email}", mapper)
+	if out != "steve@steve.fi" {
+		t.Errorf("Got unexpected output:" + out)
+	}
+}
