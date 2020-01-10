@@ -8,13 +8,14 @@ package finder
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
 // Finder holds our state.
 type Finder struct {
 
-    // Prefix is the root directory of the users' maildir hierarchy.
+	// Prefix is the root directory of the users' maildir hierarchy.
 	Prefix string
 }
 
@@ -31,6 +32,20 @@ func New(prefix string) *Finder {
 //
 // We exclude non-files, and ignore $path/tmp/.
 func (f *Finder) Messages(path string) []string {
+
+	// TODO use a struct
+	//    filename string
+	//    info os.FileInfo
+	//
+	//Then we can sort them like so:
+	//
+	// sort.Slice(files, func(i,j int) bool{
+	//	return files[i].ModTime().Unix() < files[j].ModTime().Unix()
+	// })
+	//
+	// Doing this is better than getting all the info a second
+	// time, once we've found the filenames
+	//
 
 	// Build the list of message filenames here.
 	var files []string
@@ -110,6 +125,11 @@ func (f *Finder) Maildirs() []string {
 		maildirs = append(maildirs, path)
 		return nil
 	})
+
+	//
+	// Sort
+	//
+	sort.Slice(maildirs, func(i, j int) bool { return strings.ToLower(maildirs[i]) < strings.ToLower(maildirs[j]) })
 
 	return maildirs
 }

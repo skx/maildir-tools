@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -81,11 +80,6 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 	//
 	finder := finder.New(p.prefix)
 	maildirs := finder.Maildirs()
-
-	//
-	// Sorted results are nicer.
-	//
-	sort.Strings(maildirs)
 
 	//
 	// Do we need to count files?
