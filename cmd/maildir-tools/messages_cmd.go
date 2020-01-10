@@ -1,6 +1,4 @@
-//
 // Show messages in the given Maildir folder.
-//
 
 package main
 
@@ -16,8 +14,8 @@ import (
 	"strings"
 
 	"github.com/google/subcommands"
-	"github.com/jhillyerd/enmime"
 	"github.com/skx/maildir-tools/finder"
+	"github.com/skx/maildir-tools/mailreader"
 )
 
 // messageCmd holds the state for this sub-command
@@ -105,23 +103,12 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 	for index, msg := range files {
 
 		//
-		// Open it
+		// Get the mail
 		//
-		file, err := os.Open(msg)
-		if err != nil {
-			return messages, fmt.Errorf("failed to open %s - %s", path, err.Error())
-		}
-
-		// Parse message body with enmime.
-		env, err := enmime.ReadEnvelope(file)
+		mail, err := mailreader.New(msg)
 		if err != nil {
 			return messages, err
 		}
-
-		//
-		// Ensure we don't leak.
-		//
-		file.Close()
 
 		r := regexp.MustCompile("^([0-9]+)(.*)$")
 
@@ -166,7 +153,7 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 			case "total":
 				ret = fmt.Sprintf("%d", len(files))
 			default:
-				ret = env.GetHeader(field)
+				ret = mail.Header(field)
 			}
 
 			if padding != "" {

@@ -7,11 +7,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"text/template"
 
 	"github.com/google/subcommands"
-	"github.com/jhillyerd/enmime"
+	"github.com/skx/maildir-tools/mailreader"
 )
 
 type messageCmd struct {
@@ -38,70 +37,42 @@ func (p *messageCmd) SetFlags(f *flag.FlagSet) {
 func (p *messageCmd) GetMessage(path string) (string, error) {
 
 	//
-	// Open it
-	//
-	file, err := os.Open(path)
-	if err != nil {
-		return "", fmt.Errorf("failed to open %s - %s", path, err.Error())
-	}
-
-	// Parse message body with enmime.
-	env, err := enmime.ReadEnvelope(file)
-	if err != nil {
-		return "", err
-	}
-
-	//
-	// Ensure we don't leak.
-	//
-	file.Close()
-
-	//
 	// We'll format the message with a template
 	//
 	tmpl := `To: {{.To}}
 From: {{.From}}
 Date: {{.Date}}
-Subject: {{.Subject}}{{range $i, $e := .Attachments}}
-Attachment {{$i}}: {{$e}}
-{{end}}
+Subject: {{.Subject}}
 
 {{.Body}}`
 
-	//
-	// This is the structure we'll use
-	//
+	// This is the structure we'll use to populate that
+	// template with.
 	type Message struct {
-		To          string
-		From        string
-		Subject     string
-		Date        string
-		Body        string
-		Attachments []string
+		To      string
+		From    string
+		Subject string
+		Date    string
+		Body    string
+	}
+
+	//
+	// Parse the message - note that this is gross.
+	//
+	helper, err := mailreader.NewEnmime(path)
+	if err != nil {
+		return "", err
 	}
 
 	//
 	// Populate the instance
 	//
 	var data Message
-	data.Subject = env.GetHeader("Subject")
-	data.To = env.GetHeader("To")
-	data.From = env.GetHeader("From")
-	data.Date = env.GetHeader("Date")
-
-	// Body should be text, might be HTML
-	if len(env.Text) > 0 {
-		data.Body = env.Text
-	} else if len(env.HTML) > 0 {
-		data.Body = env.HTML
-	} else {
-		data.Body = "No body"
-	}
-
-	// Add in the attachment details
-	for _, a := range env.Attachments {
-		data.Attachments = append(data.Attachments, a.FileName)
-	}
+	data.Subject = helper.Header("Subject")
+	data.To = helper.Header("To")
+	data.From = helper.Header("From")
+	data.Date = helper.Header("Date")
+	data.Body = helper.Body()
 
 	// Render.
 	var out bytes.Buffer
