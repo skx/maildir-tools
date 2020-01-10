@@ -4,6 +4,7 @@ package mailreader
 import (
 	"bytes"
 	"io/ioutil"
+	"mime"
 	"net/mail"
 )
 
@@ -46,5 +47,15 @@ func (m *Email) Header(name string) (string, error) {
 			return "", err
 		}
 	}
-	return m.Message.Header.Get(name), nil
+
+	// GO 1.5 does not decode headers, but this may change in
+	// future releases...
+	value := m.Message.Header.Get(name)
+
+	decoded, err := (&mime.WordDecoder{}).DecodeHeader(value)
+	if err != nil || len(decoded) == 0 {
+		return value, nil
+	}
+	return decoded, nil
+
 }
