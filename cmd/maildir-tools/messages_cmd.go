@@ -1,6 +1,4 @@
-//
 // Show messages in the given Maildir folder.
-//
 
 package main
 
@@ -107,7 +105,10 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 		//
 		// Get the mail
 		//
-		mail := mailreader.New(msg)
+		mail, err := mailreader.New(msg)
+		if err != nil {
+			return messages, err
+		}
 
 		r := regexp.MustCompile("^([0-9]+)(.*)$")
 
@@ -152,7 +153,7 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 			case "total":
 				ret = fmt.Sprintf("%d", len(files))
 			default:
-				ret, _ = mail.Header(field)
+				ret = mail.Header(field)
 			}
 
 			if padding != "" {
