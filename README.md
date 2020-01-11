@@ -19,6 +19,7 @@ There is a [demo of mail-client UI](https://asciinema.org/a/FXjgOsnwjVu0lB5znx8E
   * [Scripting Usage: Message Display](#scripting-usage-message-display)
 * [Console Mail Client](#console-mail-client)
 * [Github Setup](#github-setup)
+* [Bugs / Questions / Feedback?](#bugs--questions--feedback)
 
 
 
@@ -174,8 +175,13 @@ Message listing, and display, should be reasonably responsive.  However the defa
 
 
 
-## Github Setup
+# Github Setup
 
 This repository is configured to run tests upon every commit, and when pull-requests are created/updated.  The testing is carried out via [.github/run-tests.sh](.github/run-tests.sh) which is used by the [github-action-tester](https://github.com/skx/github-action-tester) action.
 
 Releases are automated in a similar fashion via [.github/build](.github/build), and the [github-action-publish-binaries](https://github.com/skx/github-action-publish-binaries) action.
+
+
+# Bugs / Questions / Feedback?
+
+Please do file an issue if you have any question, feedback, or issues to report.
