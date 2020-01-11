@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/google/subcommands"
 	"github.com/skx/maildir-tools/finder"
@@ -118,24 +116,7 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 
 			switch field {
 			case "flags":
-				//
-				flags := ""
-
-				// get the flags
-				i := strings.Index(msg, ":2,")
-				if i > 0 {
-					flags = msg[i+3:]
-				}
-
-				// Add on a fake (N)ew flag
-				if strings.Contains(msg, "/new/") {
-					flags += "N"
-				}
-
-				s := strings.Split(flags, "")
-				sort.Strings(s)
-				ret = (strings.Join(s, ""))
-
+				ret = mail.Flags()
 			case "file":
 				ret = msg
 			case "index":

@@ -24,6 +24,8 @@ import (
 	"mime"
 	"net/mail"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/jhillyerd/enmime"
 )
@@ -99,6 +101,33 @@ func NewEnmime(file string) (*Email, error) {
 	f.Close()
 
 	return x, nil
+}
+
+// Flags returns the flags from the given message, by reading them from
+// the filename.
+//
+// As a special case if the message is in the new/ folder the flag "N"
+// is also added.
+func (m *Email) Flags() string {
+	//
+	flags := ""
+
+	// get the flags
+	i := strings.Index(m.Filename, ":2,")
+	if i > 0 {
+		flags = m.Filename[i+3:]
+	}
+
+	// Add on a fake (N)ew flag
+	if strings.Contains(m.Filename, "/new/") {
+		flags += "N"
+	}
+
+	// Sort the flags.
+	s := strings.Split(flags, "")
+	sort.Strings(s)
+
+	return strings.Join(s, "")
 }
 
 // Header returns the value of the given header from within our message.
