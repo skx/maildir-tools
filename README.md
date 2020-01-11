@@ -18,6 +18,7 @@ There is a [demo of mail-client UI](https://asciinema.org/a/FXjgOsnwjVu0lB5znx8E
   * [Scripting Usage: Message List](#scripting-usage-message-list)
   * [Scripting Usage: Message Display](#scripting-usage-message-display)
 * [Console Mail Client](#console-mail-client)
+* [Github Setup](#github-setup)
 
 
 
@@ -147,6 +148,7 @@ In the UI there is support for displaying a single message, via the use of:
 The output of this is currently hardwired, but in the future we might allow it to be changed via a template-file.
 
 
+
 # Console Mail Client
 
 To assume myself that the primitives are useful, and to have some fun I put together a simple console-based mail-client which you can invoke via:
@@ -166,3 +168,14 @@ This is an __extremely__ minimal UI, which allows you to navigate:
 In each case you can return to the previous mode/view via `q`, or quit globally via `Q`.  When you're viewing a single message "`J`" and "`K`" move backwards/forwards by one message.
 
 `vi` keys work, as do HOME, END, PAGE UP|DOWN, etc.
+
+Message listing, and display, should be reasonably responsive.  However the default Maildir display is slower than I'd like because it includes counts of new/total messages.
+
+
+
+
+## Github Setup
+
+This repository is configured to run tests upon every commit, and when pull-requests are created/updated.  The testing is carried out via [.github/run-tests.sh](.github/run-tests.sh) which is used by the [github-action-tester](https://github.com/skx/github-action-tester) action.
+
+Releases are automated in a similar fashion via [.github/build](.github/build), and the [github-action-publish-binaries](https://github.com/skx/github-action-publish-binaries) action.
