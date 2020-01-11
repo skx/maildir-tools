@@ -1,3 +1,7 @@
+[![GoDoc](https://godoc.org/github.com/skx/maildir-tools?status.svg)](http://godoc.org/github.com/skx/maildir-tools)
+[![Go Report Card](https://goreportcard.com/badge/github.com/skx/maildir-tools)](https://goreportcard.com/report/github.com/skx/maildir-tools)
+[![license](https://img.shields.io/github/license/skx/maildir-tools.svg)](https://github.com/skx/maildir-tools/blob/master/LICENSE)
+
 
 This repository contains a simple golang utility which can be used for two purposes:
 
@@ -99,6 +103,13 @@ The following format-strings are available:
 |   unread | The count of unread messages in the folder. |
 
 
+Flags can be prefixed with a number to denote their width:
+
+* `#{4flags}` means left-pad the flags to be four characters long, if shorter.
+* `#{06total}` means left-pad the `total` field with `0` until it is 6 characters wide.
+* `#{20name}` means truncate the name at 20 characters if it is longer.
+
+
 
 
 ## Scripting Usage: Message List
@@ -129,8 +140,13 @@ The following format-strings are available:
 Headers are read flexibly, so if you used `#{subject}` the subject-header
 would be returned.  Similar things work for all other headers.
 
-There is one special case which is the support of displaying email
-addresses specially.  For example if you had a message from: `"Steve Kemp" <steve@steve.fi>` then the contents of `#{from}` would be that string.
+Flags can be prefixed with a number to denote their width:
+
+* `#{4flags}` means left-pad the flags to be four characters long, if shorter.
+* `#{06index}` means left-pad the `index` field with `0` until it is 6 characters wide.
+* `#{20subject}` means truncate the subject at 20 characters if it is longer.
+
+In addition to the padding/truncation there is one more special case which is the support of displaying email addresses.  For example if you had a message from: `"Steve Kemp" <steve@steve.fi>` then the contents of `#{from}` would be that string.
 
 You might prefer to use:
 
