@@ -53,8 +53,7 @@ $ go get github.com/skx/maildir-tools/cmd/maildir-tools
 
 (If you have the source-repository cloned locally run `cd cmd/maildir-tools && go install .`)
 
-In the future, after we've had our first release, you will be able to download binaries instead.
-
+Alternatively you can download our most recent stable binary from our [releases page](https://github.com/skx/maildir-tools/releases/), compiled for various systems.
 
 
 # Scripting Usage
@@ -184,4 +183,4 @@ Releases are automated in a similar fashion via [.github/build](.github/build), 
 
 # Bugs / Questions / Feedback?
 
-Please do file an issue if you have any question, feedback, or issues to report.
+Please do [file an issue](https://github.com/skx/maildir-tools/issues) if you have any question, feedback, or issues to report.
