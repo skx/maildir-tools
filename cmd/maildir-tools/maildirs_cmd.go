@@ -18,9 +18,6 @@ import (
 
 type maildirsCmd struct {
 
-	// Show only folders with unread mail?
-	unreadOnly bool
-
 	// Format string for output
 	format string
 
@@ -46,7 +43,6 @@ func (p *maildirsCmd) SetFlags(f *flag.FlagSet) {
 
 	prefix := os.Getenv("HOME") + "/Maildir/"
 
-	f.BoolVar(&p.unreadOnly, "unread", false, "Show only folders containing unread messages.")
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
 	f.StringVar(&p.format, "format", "#{06unread}/#{06total} - #{name}", "The format string to display.")
 }
@@ -74,8 +70,7 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 	var results []Maildir
 
 	//
-	// Find the maildir entries beneath our
-	// prefix directory.
+	// Find the maildir entries beneath our prefix directory.
 	//
 	finder := finder.New(p.prefix)
 	maildirs := finder.Maildirs()
@@ -83,23 +78,22 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 	//
 	// Do we need to count files?
 	//
+	// If we can avoid it that speeds things up :)
+	//
 	count := false
-	if strings.Contains(p.format, "total}") ||
-		strings.Contains(p.format, "unread}") ||
-		p.unreadOnly {
+	if strings.Contains(p.format, "total}") || strings.Contains(p.format, "unread}") {
 		count = true
 	}
 
 	//
-	// Build up the formatted results, according to
-	// our formatted string.
+	// Now we know how many results to expect.
 	//
-	for _, ent := range maildirs {
+	results = make([]Maildir, len(maildirs))
 
-		//
-		// Copy the name, in case we truncate it
-		//
-		name := ent
+	//
+	// Build up the formatted results.
+	//
+	for index, ent := range maildirs {
 
 		//
 		// Count of unread and total messages in the
@@ -112,10 +106,19 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 		// Count files if we're supposed to
 		//
 		if count {
-			messages := finder.Messages(name)
+			messages := finder.Messages(ent)
 			total = len(messages)
 
 			for _, entry := range messages {
+
+				// TODO - Fix me
+				//
+				// A message is unread if EITHER
+				//
+				// A) it is in the new/ folder
+				//
+				// B) It does NOT have the `S`een flag.
+				//
 				if strings.Contains(entry, "/new/") {
 					unread++
 				}
@@ -145,13 +148,10 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 			return ret
 		}
 
-		// Are we only showing folders with unread messages?
-		// If so continue unless this qualifies
-		if p.unreadOnly && unread < 1 {
-			continue
-		}
-
-		results = append(results, Maildir{Path: name, Rendered: formatter.Expand(p.format, mapper)})
+		//
+		// Save the results
+		//
+		results[index] = Maildir{Path: ent, Rendered: formatter.Expand(p.format, mapper)}
 	}
 
 	return results
@@ -162,10 +162,20 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 //
 func (p *maildirsCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 
+	//
+	// Get all the maildirs we know about
+	//
 	maildirs := p.GetMaildirs()
+
+	//
+	// For each one, show the formatted output
+	//
 	for _, ent := range maildirs {
 		fmt.Println(ent.Rendered)
 	}
 
+	//
+	// All done.
+	//
 	return subcommands.ExitSuccess
 }
