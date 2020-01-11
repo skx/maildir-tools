@@ -9,12 +9,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/google/subcommands"
 	"github.com/skx/maildir-tools/finder"
+	"github.com/skx/maildir-tools/formatter"
 )
 
 type maildirsCmd struct {
@@ -49,7 +48,7 @@ func (p *maildirsCmd) SetFlags(f *flag.FlagSet) {
 
 	f.BoolVar(&p.unreadOnly, "unread", false, "Show only folders containing unread messages.")
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
-	f.StringVar(&p.format, "format", "${06unread}/${06total} - ${name}", "The format string to display.")
+	f.StringVar(&p.format, "format", "#{06unread}/#{06total} - #{name}", "The format string to display.")
 }
 
 // Maildir is the type of object we return from our main
@@ -122,19 +121,11 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 				}
 			}
 		}
-		r := regexp.MustCompile("^([0-9]+)(.*)$")
 
 		//
 		// Helper for expanding our format-string
 		//
 		mapper := func(field string) string {
-
-			padding := ""
-			match := r.FindStringSubmatch(field)
-			if len(match) > 0 {
-				padding = match[1]
-				field = match[2]
-			}
 
 			ret := ""
 
@@ -151,22 +142,7 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 				ret = "Unknown variable " + field
 			}
 
-			if padding != "" {
-
-				// padding character
-				char := " "
-				if padding[0] == byte('0') {
-					char = "0"
-				}
-
-				// size we need to pad to
-				size, _ := strconv.Atoi(padding)
-				for len(ret) < size {
-					ret = char + ret
-				}
-			}
 			return ret
-
 		}
 
 		// Are we only showing folders with unread messages?
@@ -175,7 +151,7 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 			continue
 		}
 
-		results = append(results, Maildir{Path: name, Rendered: os.Expand(p.format, mapper)})
+		results = append(results, Maildir{Path: name, Rendered: formatter.Expand(p.format, mapper)})
 	}
 
 	return results

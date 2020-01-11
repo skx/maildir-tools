@@ -52,7 +52,7 @@ type uiCmd struct {
 func (p *uiCmd) getMaildirs() {
 
 	helper := &maildirsCmd{prefix: p.prefix,
-		format: "${06unread}/${06total} - ${name}"}
+		format: "#{06unread}/#{06total} - #{name}"}
 	p.maildirs = helper.GetMaildirs()
 
 }
@@ -77,7 +77,7 @@ func (p *uiCmd) getMessages() {
 	//
 	helper := &messagesCmd{}
 	var err error
-	p.messages, err = helper.GetMessages(curMaildir, "[${06index}/${06total} [${4flags}] ${subject}")
+	p.messages, err = helper.GetMessages(curMaildir, "[#{06index}/#{06total} [#{4flags}] #{subject}")
 	if err != nil {
 		ui.Close()
 		panic(err)
