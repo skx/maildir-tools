@@ -57,9 +57,34 @@ func (p *messagesCmd) SetFlags(f *flag.FlagSet) {
 	f.StringVar(&p.format, "format", "[#{index}/#{total} - #{5flags}] #{subject}", "Specify the format-string to use for the message-display")
 }
 
+// Find the absolute path to the given maildir folder
+func (p *messagesCmd) getMaildirPath(input string) (string, error) {
+
+	//
+	// We look for the absolute path, then the path
+	// beneath our root prefix.
+	//
+	prefixes := []string{input, filepath.Join(p.prefix, input)}
+
+	//
+	// Test each prefix.
+	//
+	for _, possible := range prefixes {
+
+		// Found it?  Great
+		if _, err := os.Stat(possible); !os.IsNotExist(err) {
+			return possible, nil
+		}
+	}
+
+	// No match
+	return "", fmt.Errorf("maildir '%s' wasn't found", input)
+}
+
+// Get the messages in the given folder.
 //
-// Show the messages in the given folder
-//
+// If the path is absolute it will be used as-is, otherwise we'll hunt
+// for it beneath our configured prefix.
 func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, error) {
 
 	//
@@ -68,39 +93,39 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 	var messages []SingleMessage
 
 	//
-	// Ensure the maildir exists
+	// Get the fully-qualified path to the given maildir
+	// folder.
 	//
-	prefixes := []string{path, filepath.Join(p.prefix, path)}
-
+	// e.g. "people-foo" becomes "/home/blah/Maildir/people-foo",
+	// we need this path to find the messages from.
 	//
-	// Found it yet?
-	//
-	found := false
-
-	//
-	// Test both the complete path, and the directory relative
-	// to our prefix-root.
-	//
-	for _, possible := range prefixes {
-		if _, err := os.Stat(possible); !os.IsNotExist(err) {
-			found = true
-			path = possible
-		}
-	}
-	if !found {
-		return messages, fmt.Errorf("maildir '%s' wasn't found", path)
+	path, err := p.getMaildirPath(path)
+	if err != nil {
+		return messages, err
 	}
 
+	//
+	// Helper for finding messages.
+	//
 	finder := finder.New(p.prefix)
+
+	//
+	// Find the messages
+	//
 	files := finder.Messages(path)
 
 	//
-	// For each file - parse the email message and output a summary.
+	// We know how many messages to expect now.
+	//
+	messages = make([]SingleMessage, len(files))
+
+	//
+	// For each file - parse the email message and generate a summary.
 	//
 	for index, msg := range files {
 
 		//
-		// Get the mail
+		// Read the mail, so we can access the data.
 		//
 		mail, err := mailreader.New(msg)
 		if err != nil {
@@ -130,10 +155,16 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 			return ret
 		}
 
-		messages = append(messages, SingleMessage{Path: msg,
-			Rendered: formatter.Expand(format, headerMapper)})
+		//
+		// Record the entry.
+		//
+		messages[index] = SingleMessage{Path: msg,
+			Rendered: formatter.Expand(format, headerMapper)}
 	}
 
+	//
+	// All done.
+	//
 	return messages, nil
 }
 
