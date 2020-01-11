@@ -1,9 +1,10 @@
 
 This repository contains a simple golang utility which can be used for two purposes:
 
-* To perform simple script operations against Maildir hierarchies.
-* To provide a simple, console-based, email-client.
+* To perform simple scripting operations against Maildir hierarchies.
+* To provide a simple console-based email-client.
   * Albeit a basic one that only allows reading/viewing maildirs/messages.
+  * (i.e. You cannot reply, compose, delete, or mark a message as read/unread.)
 
 There is a [demo of mail-client UI](https://asciinema.org/a/FXjgOsnwjVu0lB5znx8EwRVWF), but the focus at the moment is upon improving the scripting facilities.
 
@@ -11,40 +12,36 @@ There is a [demo of mail-client UI](https://asciinema.org/a/FXjgOsnwjVu0lB5znx8E
 # Contents
 
 * [maildir-tools](#maildir-tools)
-* [Installation](#installation)
-* [Usage](#usage)
-* [Sub-Commands](#sub-commands)
-  * [maildir-tools maildirs](#maildir-tools-maildirs)
-  * [maildir-tools messages](#maildir-tools-messages)
-  * [maildir-tools message](#maildir-tools-message)
-  * [maildir-tools ui](#maildir-tools-ui)
+  * [Installation](#installation)
+* [Scripting Usage](#scripting-usage)
+  * [Scripting Usage: Maildir List](#scripting-usage-maildir-list)
+  * [Scripting Usage: Message List](#scripting-usage-message-list)
+  * [Scripting Usage: Message Display](#scripting-usage-message-display)
+* [Console Mail Client](#console-mail-client)
+
+
 
 
 # maildir-tools
 
 In the past I've written a couple of console-based email clients, and I always found the user-interface the hardest part.
 
-This repository contains a simple proof of concept for a different approach towards email clients:
+This repository contains a proof of concept for a different approach towards an email client: Instead of a monolithic "mail-client" why not compose one from pieces?  (Which is basically the motivation and history behind [MH](https://en.wikipedia.org/wiki/MH_Message_Handling_System).)
 
-* Instead of a monolithic "mail-client" why not compose one from pieces?
-  * This is basically the motivation and history behind [MH](https://en.wikipedia.org/wiki/MH_Message_Handling_System)
+I can imagine mail-client which is nothing more than a bunch of shell-scripts, perhaps using `dialog` to glue them together, because most mail-clients are "modal" in intent, if not necessarily in operation:
 
-I can imagine a UI which is nothing more than a bunch of shell-scripts, perhaps using `dialog` to drive them:
+* We need to view a list of folders.
+* We need to view a list of messages.
+* We need to view a single message.
 
-* In one state it just runs a shell-command to list folders, and lets you move a cursor up and down to enter one.
-* In another state it might just run a shell-command to list messages in the folder you've chosen.
-  * Again you may move the cursor up and down, and select a message.
-* In the final state a shell-command might be executed to display a message.
-  * And allow you to hit keys to mark read, reply, etc.
+The scripting support of `maildir-tools` allows each of those to be handled in a simple, reliable, and flexible fashion.  The driving force behind this repository is providing those primitives, things that a simple UI would need - and as a side-effect provide a useful tool for working with Maildir hierarchies.
 
-This should be almost trivial to write.  Right?  The hardest part would be handling the sorting of messages into threads, etc.
-
-The driving force behind this repository is currently the ability to provide the primitives that a simple UI would need - and as a side-effect provide a useful tool for working with Maildir hierarchies.
-
-It might be that, over time, a console-based mail-client is built, but that is a secondary focus.  I personally have thousands of email messages in a deeply nested Maildir hierarchy and even being able to dump, script, and view messages in a flexible fashion is useful.  Of course I have written email clients (plural) in the past so it is tempting to try again, but I can appreciate that gaining users is hard and the job is always bigger than expected.
+It might be that, over time, a console-based mail-client is built, but that is a secondary focus.  I personally have thousands of email messages in a deeply nested Maildir hierarchy and even being able to dump, script, and view messages in a flexible fashion is useful.  Of course I have written email clients (plural!) in the past so it is tempting to try again, but I can appreciate that gaining users is hard and the job is always bigger than expected.
 
 
-# Installation
+
+
+## Installation
 
 To install from source you can use the standard golang-approach:
 
@@ -58,84 +55,105 @@ In the future, after we've had our first release, you will be able to download b
 
 
 
-# Usage
+# Scripting Usage
 
-There are currently several sub-commands available:
+There are several sub-commands available which are designed to allow you to script access to a maildir-hierarchy, and the messages stored within it.
 
 * `maildir-tools maildirs`
   * This command lists all your maildir folders, recursively.
 * `maildir-tools messages $folder1 $folder2 .. $folderN`
   * This lists the messages inside a folder.
-  * Handling the output in a flexible fashion.
-* `maildir-tools message $file`
+* `maildir-tools message $file $file2 .. $fileN`
   * This formats and displays a single message.
-  * If a `text/plain` part is available then that is displayed.
-     * Otherwise any available `text/html` part is used.
-        *  If neither are available nothing is shown.
-* `maildir-tools ui`
-  * Toy user-interface that proves we could make something of ourselves.
 
-With the ability to view folders, message-lists, and a single message we almost have enough to be a functional mail-client.  Albeit one within which you cannot compose, delete, or reply to a message.
+Most of the sub-commands default to looking in `~/Maildir` but the `-prefix /path/to/root` will let you change the directory.  Maildirs are handled recursively, and things are pretty fast but I guess local SSDs help with that.  For everything else there is always the option to cache things.
 
-Most of the sub-commands default to looking in `~/Maildir` but the `-prefix /path/to/root` will let you change the directory.  Maildirectories are handled recursively, and things are pretty fast but I guess local SSDs help with that.  For everything else there is always the option to cache things.
+(ProTip: The format-string you use makes a difference, for example `#{name}` is faster than `#{unread}`, which requires counting the messages which are unread.)
 
 
+## Scripting Usage: Maildir List
 
-# Sub-Commands
+The most basic usage is the following, which will recursively show the Maildirs beneath `~/Maildirs`:
 
-Currently this project will build a single monolithic binary with a couple of sub-commands, run it with no arguments to see usage information.
+`$ maildir-tools maildirs`
 
-
-## `maildir-tools maildirs`
-
-This will output a list of maildir directories, by default showing the complete path of each maildir which was found.
+To change the output you can supply a format-string to specify what should be displayed, for example:
 
 ```
-$ maildir-tools maildirs --format '${name}' | grep debian-packages
+$ maildir-tools maildirs --format '#{name}' | grep debian-packages
+..
 /home/skx/Maildir/debian-packages
 /home/skx/Maildir/debian-packages-Pkg-javascript-devel
 /home/skx/Maildir/debian-packages-aatv
-/home/skx/Maildir/debian-packages-abiword
-/home/skx/Maildir/debian-packages-amaya
-/home/skx/Maildir/debian-packages-anon-proxy
-/home/skx/Maildir/debian-packages-apache
-/home/skx/Maildir/debian-packages-apache2
-/home/skx/Maildir/debian-packages-apachetop
-/home/skx/Maildir/debian-packages-apt
-/home/skx/Maildir/debian-packages-apt-listchanges
+..
 ```
 
-Flags can be used to refine the output, for example:
+The following format-strings are available:
 
-* `-format '${unread} ${total} ${name}'`
-  * To specify what is output.
-* `-unread`
-  * Only show maildirs containing unread messages.
+|     Flag |                                    Meaning  |
+| -------- | ------------------------------------------- |
+|     name | The name of the folder.                     |
+|shortname | The name of the folder, without the prefix. |
+|    total | The total count of messages in the folder.  |
+|   unread | The count of unread messages in the folder. |
 
 
-## `maildir-tools messages $folder1 $folder2 .. $folderN`
 
-This sub-command allows you to list the messages contained within a maildir folder with a flexible formatting system for output
+
+## Scripting Usage: Message List
+
+The most basic usage is the following, which will output a summary of all the messages in the Maildir folder located at `~/Maildirs/example`:
+
+`$ maildir-tools messages example`
+
+To change the output you can supply a format-string to specify what should be displayed, for example:
 
 ```
-$ maildir-tools messages --format '[${4flags}] ${from} ${subject}' debian-packages-ttylog
+$ maildir-tools messages --format '[#{4flags}] #{from} #{subject}' debian-packages-ttylog
+..
 [    S] Steve Kemp <skx@debian.org> Bug#553945: Acknowledgement (ttylog: Doesn't test length of device.)
-
+..
 ```
 
-Here `${4flags}` was replaced by the message flags (`S` in this case), and that was padded to be four bytes long, `${from}` with the message sender, etc.
+The following format-strings are available:
 
-(You can also use `${file}` to refer to the filename of the message, and other header-values as you would expect.  The other magical values are "`${index}/${total}`" which show the current/total number of entries.)
+|     Flag |                                   Meaning  |
+| -------- | ------------------------------------------ |
+|    flags | The flags of the message.                  |
+|    file  | The filename of the message                |
+|    index | The index of the message in the folder.    |
+|    total | The total count of messages in the folder. |
+| "header" | The content of the named header.           |
 
-You can specify either the short-path to the Maildir, beneath the root directory, or the complete path `/home/skx/Maildir/people-foo`, depending upon your preference.
+Headers are read flexibly, so if you used `#{subject}` the subject-header
+would be returned.  Similar things work for all other headers.
 
-* I recently switched to a new MIME library, it is slow.
-* Takes 20-25 seconds to open a maildir with 40,000 messages.
-  * This means I need caching, or need a faster MIME-aware mail-library.
-  * Pointers welcome.  Patches even more welcome.
+There is one special case which is the support of displaying email
+addresses specially.  For example if you had a message from: `"Steve Kemp" <steve@steve.fi>` then the contents of `#{from}` would be that string.
+
+You might prefer to use:
+
+* "`#{from.name}`" to receive the output "Steve Kemp".
+* "`#{from.email}`" to receive the output "<steve@steve.fi>".
 
 
-## `maildir-tools ui`
+
+## Scripting Usage: Message Display
+
+In the UI there is support for displaying a single message, via the use of:
+
+`$ maildir-tools message path/to/maildir/cur/foo:2,S`
+
+The output of this is currently hardwired, but in the future we might allow it to be changed via a template-file.
+
+
+# Console Mail Client
+
+To assume myself that the primitives are useful, and to have some fun I put together a simple console-based mail-client which you can invoke via:
+
+```
+maildir-tools ui
+```
 
 This is an __extremely__ minimal UI, which allows you to navigate:
 
@@ -148,8 +166,3 @@ This is an __extremely__ minimal UI, which allows you to navigate:
 In each case you can return to the previous mode/view via `q`, or quit globally via `Q`.  When you're viewing a single message "`J`" and "`K`" move backwards/forwards by one message.
 
 `vi` keys work, as do HOME, END, PAGE UP|DOWN, etc.
-
-
-## `maildir-tools message`
-
-This sub-command outputs a reasonably attractive rendering of a single message.
