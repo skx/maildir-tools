@@ -44,6 +44,9 @@ type uiCmd struct {
 	// List for displaying a single message.
 	emailList *widgets.List
 
+	// List for displaying help
+	helpList *widgets.List
+
 	// Prefix for our maildir hierarchy
 	prefix string
 }
@@ -139,6 +142,49 @@ func (p *uiCmd) showUI() {
 	p.emailList.Title = "Email"
 	p.emailList.Rows = []string{}
 
+	// Listbox to hold the help
+	p.helpList = widgets.NewList()
+	p.helpList.Title = "Help"
+	p.helpList.Rows = []string{}
+
+	p.helpList.Rows = strings.Split(
+		`
+
+This is a simple console-based email client.
+
+This UI is primarily a demo, to prove to the author that the idea of
+a simple set of primitives could be useful.
+
+Navigation with the keyboard is the same in all modes:
+
+Key                | Action
+-------------------+--------------------------------------
+q                  | Return to the previous mode
+Q                  | Quit
+j, Down            | Scroll down
+k, Up              | Scroll up
+Ctrl-d             | Scroll down half a page
+Ctrl-u             | Scroll up half a page
+Ctrl-f, PageDown   | Scroll down a page
+Ctrl-b, PageUp     | Scroll up a page
+gg, <, HOME        | Go to top of list
+gG, >, END         | Go to end of list
+w                  | Toggle line-wrap
+Ctrl-j, Ret, Space | Select
+
+Message-View Mode has two more keys
+
+Key | Action
+----+--------------------------
+J   | Select the next message.
+K   | Select the previous message.
+
+Press 'q' to exit this help window.
+
+Steve
+--
+`, "\n")
+
 	// Default mode
 	p.mode = "maildir"
 
@@ -148,20 +194,18 @@ func (p *uiCmd) showUI() {
 		p.maildirList.Rows = append(p.maildirList.Rows, r.Rendered)
 	}
 
-	// Set colours for maildir list
-	p.maildirList.TextStyle = ui.NewStyle(ui.ColorYellow)
-	p.maildirList.WrapText = false
-	p.maildirList.SetRect(0, 0, width, height)
+	// Process each known-widget
+	tmp := []*widgets.List{p.maildirList,
+		p.messageList,
+		p.emailList,
+		p.helpList}
 
-	// Set the colours for the message list
-	p.messageList.TextStyle = ui.NewStyle(ui.ColorYellow)
-	p.messageList.WrapText = false
-	p.messageList.SetRect(0, 0, width, height)
-
-	// Set the colours for our message-view
-	p.emailList.TextStyle = ui.NewStyle(ui.ColorWhite)
-	p.emailList.WrapText = false
-	p.emailList.SetRect(0, 0, width, height)
+	// Set the text-style, the size, and colours
+	for _, entry := range tmp {
+		entry.TextStyle = ui.NewStyle(ui.ColorGreen)
+		entry.WrapText = false
+		entry.SetRect(0, 0, width, height)
+	}
 
 	// Render the starting state
 	ui.Render(p.maildirList)
@@ -186,7 +230,13 @@ func (p *uiCmd) showUI() {
 		// Handle events - mostly this means
 		// responding to keyboard events
 		e := <-uiEvents
+
 		switch e.ID {
+
+		// "?" shows help
+		case "?":
+			p.mode = "help"
+			widget = p.helpList
 
 		// Q quits in all modes.
 		case "Q", "<C-c>":
@@ -200,7 +250,7 @@ func (p *uiCmd) showUI() {
 				run = false
 			}
 			// index -> maildir
-			if p.mode == "messages" {
+			if p.mode == "messages" || p.mode == "help" {
 				p.mode = "maildir"
 				widget = p.maildirList
 
