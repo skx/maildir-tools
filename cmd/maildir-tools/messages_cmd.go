@@ -8,13 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/google/subcommands"
 	"github.com/skx/maildir-tools/finder"
+	"github.com/skx/maildir-tools/formatter"
 	"github.com/skx/maildir-tools/mailreader"
 )
 
@@ -57,7 +56,7 @@ func (p *messagesCmd) SetFlags(f *flag.FlagSet) {
 	prefix := os.Getenv("HOME") + "/Maildir/"
 
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
-	f.StringVar(&p.format, "format", "[${index}/${total} - ${flags}] ${subject}", "Specify the format-string to use for the message-display")
+	f.StringVar(&p.format, "format", "[#{index}/#{total} - #{5flags}] #{subject}", "Specify the format-string to use for the message-display")
 }
 
 //
@@ -110,19 +109,10 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 			return messages, err
 		}
 
-		r := regexp.MustCompile("^([0-9]+)(.*)$")
-
 		//
 		// Expand the template-string
 		//
 		headerMapper := func(field string) string {
-
-			padding := ""
-			match := r.FindStringSubmatch(field)
-			if len(match) > 0 {
-				padding = match[1]
-				field = match[2]
-			}
 
 			ret := ""
 
@@ -156,25 +146,11 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 				ret = mail.Header(field)
 			}
 
-			if padding != "" {
-
-				// padding character
-				char := " "
-				if padding[0] == byte('0') {
-					char = "0"
-				}
-
-				// size we need to pad to
-				size, _ := strconv.Atoi(padding)
-				for len(ret) < size {
-					ret = char + ret
-				}
-			}
 			return ret
 		}
 
 		messages = append(messages, SingleMessage{Path: msg,
-			Rendered: os.Expand(format, headerMapper)})
+			Rendered: formatter.Expand(format, headerMapper)})
 	}
 
 	return messages, nil
