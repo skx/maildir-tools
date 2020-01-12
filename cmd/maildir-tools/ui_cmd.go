@@ -112,6 +112,50 @@ func (p *uiCmd) getMessage() []string {
 	return strings.Split(out, "\n")
 }
 
+// deleteCurrentMessage is called in either the message-list mode,
+// or in the message-view mode.  It deletes the current message
+// in either case.
+func (p *uiCmd) deleteCurrentMessage() {
+
+	// Delete from the message-index
+	if p.mode == "messages" {
+
+		// Get the selected message
+		i := p.messageList.SelectedRow
+
+		// If we don't have one, something is weird.
+		if i < 0 {
+			return
+		}
+
+		// Get the file on-disk
+		file := p.messages[i].Path
+
+		// Delete it
+		os.Remove(file)
+
+		// Refresh the message-list
+		// Update our list of messages
+		p.getMessages()
+
+		// Reset our UI
+		p.messageList.Rows = []string{}
+
+		for _, r := range p.messages {
+			p.messageList.Rows = append(p.messageList.Rows, r.Rendered)
+		}
+
+		// Restore the index
+		p.messageList.SelectedRow = i
+		if i > len(p.messageList.Rows)-1 {
+			p.messageList.SelectedRow--
+		}
+		return
+	}
+
+	// TODO - delete when viewing a single message.
+}
+
 // showUI handles state-transitions and displays
 //
 // All our code is built around a set of list-views,
@@ -274,6 +318,11 @@ Steve
 				for _, r := range p.messages {
 					p.messageList.Rows = append(p.messageList.Rows, r.Rendered)
 				}
+			}
+		case "d":
+			if p.mode == "messages" ||
+				p.mode == "message" {
+				p.deleteCurrentMessage()
 			}
 		case "j", "<Down>":
 			widget.ScrollDown()
