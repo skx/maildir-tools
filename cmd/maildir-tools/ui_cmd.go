@@ -34,8 +34,8 @@ type UIHistory struct {
 	offset int
 }
 
-// tuiCmd holds the state of our TUI application.
-type tuiCmd struct {
+// uiCmd holds the state of our TUI application.
+type uiCmd struct {
 
 	// app holds the pointer to our application.
 	app *tview.Application
@@ -99,13 +99,13 @@ type tuiCmd struct {
 }
 
 // getMaildirs returns ALL maildirs beneath our configured prefix-directory.
-func (p *tuiCmd) getMaildirs() {
+func (p *uiCmd) getMaildirs() {
 	helper := &maildirsCmd{prefix: p.prefix, format: "[#{06unread}/#{06total}] #{name}"}
 	p.maildirs = helper.GetMaildirs()
 }
 
 // getMessages gets all the messages in the currently selected maildir.
-func (p *tuiCmd) getMessages() {
+func (p *uiCmd) getMessages() {
 
 	var err error
 
@@ -133,7 +133,7 @@ func (p *tuiCmd) getMessages() {
 }
 
 // getMessage returns the content of a single email.
-func (p *tuiCmd) getMessage() []string {
+func (p *uiCmd) getMessage() []string {
 
 	// The file on-disk
 	file := p.curMessage
@@ -168,7 +168,7 @@ func (p *tuiCmd) getMessage() []string {
 // TODO:
 //    config   |
 //    compose  |
-func (p *tuiCmd) SetMode(mode string, record bool) {
+func (p *uiCmd) SetMode(mode string, record bool) {
 
 	// If we're supposed to record our state-transition then
 	// do so here.
@@ -293,7 +293,7 @@ func (p *tuiCmd) SetMode(mode string, record bool) {
 // TODO: Support regexp?  We'd have to implement the logic ourselves, but
 // it wouldn't be hard.  Right now we use the List-specific helper from the
 // UI-toolkit.
-func (p *tuiCmd) Search() {
+func (p *uiCmd) Search() {
 
 	// Get the old UI element which had focus
 	old := p.app.GetFocus()
@@ -374,7 +374,7 @@ func (p *tuiCmd) Search() {
 // Return to the previous mode, if possible, using our history-stack.
 //
 // This is a bit horrid.
-func (p *tuiCmd) PreviousMode() {
+func (p *uiCmd) PreviousMode() {
 
 	// Default
 	prev := "maildir"
@@ -414,7 +414,7 @@ func (p *tuiCmd) PreviousMode() {
 //
 // All our code is built around a set of list-views, although we only
 // display one at a time.
-func (p *tuiCmd) TUI() {
+func (p *uiCmd) TUI() {
 
 	// Create the applicaiton
 	p.app = tview.NewApplication()
@@ -529,9 +529,9 @@ func (p *tuiCmd) TUI() {
 //
 // Glue
 //
-func (*tuiCmd) Name() string     { return "tui" }
-func (*tuiCmd) Synopsis() string { return "Show our text-based user-interface." }
-func (*tuiCmd) Usage() string {
+func (*uiCmd) Name() string     { return "tui" }
+func (*uiCmd) Synopsis() string { return "Show our text-based user-interface." }
+func (*uiCmd) Usage() string {
 	return `tui :
   Show our text-based user-interface.
 `
@@ -540,7 +540,7 @@ func (*tuiCmd) Usage() string {
 //
 // Flag setup
 //
-func (p *tuiCmd) SetFlags(f *flag.FlagSet) {
+func (p *uiCmd) SetFlags(f *flag.FlagSet) {
 	prefix := os.Getenv("HOME") + "/Maildir/"
 	f.StringVar(&p.prefix, "prefix", prefix, "The prefix directory.")
 }
@@ -548,7 +548,7 @@ func (p *tuiCmd) SetFlags(f *flag.FlagSet) {
 //
 // Entry-point.
 //
-func (p *tuiCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+func (p *uiCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 
 	// Run the TUI
 	p.TUI()
