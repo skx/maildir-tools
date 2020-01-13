@@ -1,409 +1,539 @@
 //
-// This command implements our (trivial) user-interface.
+// The `ui` sub-command presents a simple GUI using the primitives we've
+// defined elsewhere.
 //
-// It allows displaying a list of Maildir folders,
-// a list of messages, and finally a single message.
-//
-// It is obviously very rough and ready, but
-// despite that it seems to function reasonably
-// well, albeit slowly due to lack of caching.
-//
+
 package main
 
 import (
 	"context"
 	"flag"
-	"log"
 	"os"
 	"strings"
 
-	ui "github.com/gizak/termui/v3"
-	"github.com/gizak/termui/v3/widgets"
+	"github.com/gdamore/tcell"
 	"github.com/google/subcommands"
+	"github.com/rivo/tview"
 )
 
-// uiCmd holds our state.
-type uiCmd struct {
+// UIHistory stores UI history.
+//
+// When we change mode we record the current/previous mode, and selection
+// offset, so that we can go back to that when we need to.
+//
+// The way this structure is used is suboptimal, because we store the
+// index in the record we remove - rather than the index we restore to.
+// See `PreviousMode` for details.
+type UIHistory struct {
 
-	// Current mode.
+	// mode holds the mode we changed TO.
 	mode string
 
-	// List for maildir-entries.
-	maildirList *widgets.List
+	// offset holds the offset of the selected item in the list-view,
+	// BEFORE we changed mode.
+	offset int
+}
 
-	// The actual maildirs we have found, which are being displayed.
+// uiCmd holds the state of our TUI application.
+type uiCmd struct {
+
+	// app holds the pointer to our application.
+	app *tview.Application
+
+	// Keep track of our mode-transitions.
+	//
+	// Here we're treating our client as a modal-application,
+	// where we're always in one of three main states ("maildir-list",
+	// "message-list", or "message-display").  We keep track of our
+	// previous mode whenever we change - which allows us to jump
+	// back quickly, easily, and efficiently.
+	//
+	// Mostly this is overkill because we always have the same
+	// entry and exit-states.  But for things like config-mode
+	// (unimplemented) or help-display we will need to support a
+	// more random mode-transition.
+	//
+	// TODO: Reconsider this, perhaps.  cc:lumail
+	modeHistory []UIHistory
+
+	// The actual maildirs we have found, and which we want to display.
 	maildirs []Maildir
 
+	// List for displaying maildir-entries.
+	maildirList *tview.List
+
+	// Currently selected maildir.
+	//
+	// TODO: Do we need this?  `maildirList` is global so we can
+	// read from that on-demand.   cc:lumail
+	//
+	curMaildir string
+
 	// List for message-entries.
-	messageList *widgets.List
+	messageList *tview.List
 
 	// The actual messages in the currently-selected maildir,
 	// which are being displayed.
 	messages []SingleMessage
 
+	// Path to current message
+	//
+	// TODO: Do we need this?  `messageList` is global so we can
+	// read from that on-demand.   cc:lumail
+	//
+	curMessage string
+
 	// List for displaying a single message.
-	emailList *widgets.List
+	emailList *tview.List
 
 	// List for displaying help
-	helpList *widgets.List
+	helpList *tview.List
 
 	// Prefix for our maildir hierarchy
 	prefix string
+
+	// Searching - these shouldn't be global.
+	// TODO: Remove these.
+	searchText string
+	inputField *tview.InputField
 }
 
-// getMaildirs returns ALL maildirs
+// getMaildirs returns ALL maildirs beneath our configured prefix-directory.
 func (p *uiCmd) getMaildirs() {
-
-	helper := &maildirsCmd{prefix: p.prefix,
-		format: "#{06unread}/#{06total} - #{name}"}
+	helper := &maildirsCmd{prefix: p.prefix, format: "[#{06unread}/#{06total}] #{name}"}
 	p.maildirs = helper.GetMaildirs()
-
 }
 
-// getMessages gets the messages in the currently selected maildir
+// getMessages gets all the messages in the currently selected maildir.
 func (p *uiCmd) getMessages() {
 
-	// Get the selected folder
-	curMaildir := p.maildirs[p.maildirList.SelectedRow].Path
+	var err error
+
+	// If we have no current-maildir AND the list is non-empty
+	// then we use the first.  The change-handler doesn't run
+	// for the first item highlighted by the tview UI
+	if p.curMaildir == "" {
+		if len(p.maildirs) > 0 {
+			p.curMaildir = p.maildirs[0].Path
+		}
+	}
 
 	// The messages are empty now
 	p.messages = []SingleMessage{}
 
-	// No directory?  That's a bug really
-	if curMaildir == "" {
-		return
-	}
-
 	// Get the messages via our helper.
-	//
-	// TODO/Gross/Hack/FIXME
-	//
 	helper := &messagesCmd{}
-	var err error
-	p.messages, err = helper.GetMessages(curMaildir, "[#{06index}/#{06total} [#{4flags}] #{subject}")
+	p.messages, err = helper.GetMessages(p.curMaildir, "[#{06index}/#{06total} [#{4flags}] #{subject}")
+
+	// Failed to get messages?
 	if err != nil {
-		ui.Close()
+		// TODO: Dialog
 		panic(err)
 	}
 }
 
-// getMessage returns the content of a single
-// email.
+// getMessage returns the content of a single email.
 func (p *uiCmd) getMessage() []string {
 
-	// Get the message
-	selectedMsg := p.messageList.SelectedRow
-
-	// avoid empty reading
-	if selectedMsg < 0 {
-		return []string{"empty", "message"}
-	}
-
 	// The file on-disk
-	file := p.messages[selectedMsg].Path
+	file := p.curMessage
+
+	// If we have no current-message AND the list is non-empty
+	// then we use the first.  The change-handler doesn't run
+	// for the first item highlighted by the tview UI
+	if file == "" {
+		if len(p.messages) > 0 {
+			file = p.messages[0].Path
+		}
+	}
 
 	// Get the output
 	helper := &messageCmd{}
 	out, err := helper.GetMessage(file)
 	if err != nil {
-		return ([]string{err.Error()})
+		// TODO: Dialog
+		return ([]string{"Failed to read " + file + " " + err.Error()})
 	}
 
 	return strings.Split(out, "\n")
 }
 
-// showUI handles state-transitions and displays
+// SetMode updates our global state to be one of:
 //
-// All our code is built around a set of list-views,
-// although we only build one at a time.
-func (p *uiCmd) showUI() {
+//    maildirs | View a list of maildirs.
+//    messages | View a list of messages.
+//    message  | View a single message.
+//    help     | Show our help.
+//
+// TODO:
+//    config   |
+//    compose  |
+func (p *uiCmd) SetMode(mode string, record bool) {
 
-	// setup our terminal
-	if err := ui.Init(); err != nil {
-		log.Fatalf("failed to initialize termui: %v", err)
+	// If we're supposed to record our state-transition then
+	// do so here.
+	//
+	// Basically we always record our mode-change, unless we're
+	// reverting to a previous state (via `q`).  In that case
+	// we reuse this method, but explicitly don't want to record
+	// the state from which we returned - or we'd get a loop!
+	//
+	if record {
+
+		var x UIHistory
+		x.mode = mode
+		x.offset = -1
+
+		// If we're in a view then get the current list-offset
+		focus := p.app.GetFocus()
+		l, ok := focus.(*tview.List)
+		if ok {
+			x.offset = l.GetCurrentItem()
+		}
+
+		// Record the entry
+		p.modeHistory = append(p.modeHistory, x)
+	}
+
+	if mode == "maildir" {
+
+		// get the initial lines for the maildir view
+		p.getMaildirs()
+
+		// Empty the list
+		p.maildirList.Clear()
+
+		// Add each (rendered) maildir
+		for _, r := range p.maildirs {
+			p.maildirList.AddItem(r.Rendered, r.Path, 0,
+				func() {
+
+					// Change the mode
+					p.SetMode("messages", true)
+
+					// Change the view
+					p.app.SetRoot(p.messageList, true)
+				}).
+				SetChangedFunc(func(index int, rendered string, path string, shorcut rune) {
+					p.curMaildir = path
+				})
+		}
+
+		// Update UI
+		p.app.SetRoot(p.maildirList, true)
 		return
 	}
 
-	// Get the dimensions so we can scale our UI
-	width, height := ui.TerminalDimensions()
+	if mode == "messages" {
 
-	// Listbox to hold our maildir entries
-	p.maildirList = widgets.NewList()
-	p.maildirList.Title = "Maildir Entries"
-	p.maildirList.Rows = []string{}
+		// get the messages we want to display
+		p.getMessages()
+
+		// Empty the list
+		p.messageList.Clear()
+
+		// Add each (rendered) item
+		for _, r := range p.messages {
+			p.messageList.AddItem(r.Rendered, r.Path, 0,
+				func() {
+
+					// Change the mode
+					p.SetMode("message", true)
+
+					// Change the view
+					p.app.SetRoot(p.messageList, true)
+				}).
+				SetChangedFunc(func(index int, rendered string, path string, shorcut rune) {
+					p.curMessage = path
+				})
+		}
+
+		// Update UI
+		p.app.SetRoot(p.messageList, true)
+		return
+	}
+
+	if mode == "message" {
+
+		// get the message we want to display
+		txt := p.getMessage()
+
+		// Empty the list
+		p.messageList.Clear()
+
+		// Add each (rendered) item
+		for _, r := range txt {
+			p.messageList.AddItem(r, "", 0, nil)
+		}
+
+		// Update UI
+		p.app.SetRoot(p.emailList, true)
+		return
+	}
+
+	if mode == "help" {
+		p.helpList.Clear()
+		p.helpList.AddItem("Help goes here", "", 0, nil)
+
+		// Update UI
+		p.app.SetRoot(p.helpList, true)
+		return
+	}
+
+	// Can't happen?
+	panic("unknown mode " + mode)
+}
+
+// Search is a function which will operate upon any `List`-based view.
+//
+// It will prompt for text, and select the next entry which matches that
+// text.  The text is matched literally (albeit case-insensitively), rather
+// than as a regular expression.
+//
+// TODO: Support regexp?  We'd have to implement the logic ourselves, but
+// it wouldn't be hard.  Right now we use the List-specific helper from the
+// UI-toolkit.
+func (p *uiCmd) Search() {
+
+	// Get the old UI element which had focus
+	old := p.app.GetFocus()
+
+	// Prompt for input
+	p.inputField = tview.NewInputField().
+		SetLabel("Search: ").
+		SetFieldWidth(40).
+		SetDoneFunc(func(key tcell.Key) {
+
+			// Highlight the old value
+			p.app.SetRoot(old, true)
+
+			// If this was a completed enter then do the search
+			if key == tcell.KeyEnter {
+
+				// Get the text - keep the previous
+				// value if this is empty
+				val := p.inputField.GetText()
+				if len(val) > 0 {
+					p.searchText = val
+				}
+				if len(p.searchText) < 1 {
+					return
+				}
+
+				// Can we cast our (previous) UI-item
+				// into a list?  If so do it
+				l, ok := old.(*tview.List)
+				if ok {
+
+					//
+					// Search.
+					//
+					inx := l.FindItems(p.searchText, p.searchText, false, true)
+
+					//
+					// We now want to find the "next"
+					// match, handling wrap-arround.
+					//
+					cur := l.GetCurrentItem()
+					max := l.GetItemCount()
+
+					// Always search forward from
+					// the next line.
+					cur++
+					if cur > max {
+						cur = 0
+					}
+
+					tested := 0
+					for tested < max {
+
+						offset := cur + tested
+						if offset >= max {
+							offset -= max
+						}
+
+						// Grossly inefficient..
+						for _, j := range inx {
+							if j == offset {
+								l.SetCurrentItem(j)
+								return
+							}
+						}
+
+						tested++
+					}
+				}
+			}
+		})
+
+	// update ui
+	p.app.SetRoot(p.inputField, true)
+
+}
+
+// Return to the previous mode, if possible, using our history-stack.
+//
+// This is a bit horrid.
+func (p *uiCmd) PreviousMode() {
+
+	// Default
+	prev := "maildir"
+	offset := -1
+
+	// If we have history - remove the last entry.
+	if len(p.modeHistory) > 0 {
+		// the offset is on the last entry
+		offset = p.modeHistory[len(p.modeHistory)-1].offset
+		p.modeHistory = p.modeHistory[:len(p.modeHistory)-1]
+	}
+
+	// Now set the history to the previous one
+	if len(p.modeHistory) > 0 {
+		prev = p.modeHistory[len(p.modeHistory)-1].mode
+	}
+
+	// Set the mode now
+	p.app.QueueUpdateDraw(func() {
+		p.SetMode(prev, false)
+
+		// If the current value is a list
+		if offset != -1 {
+			old := p.app.GetFocus()
+			l, ok := old.(*tview.List)
+			if ok {
+				// set the old offset
+				l.SetCurrentItem(offset)
+			}
+		}
+
+	})
+}
+
+// TUI sets up our user-interface, and handles the execution of the
+// main-loop.
+//
+// All our code is built around a set of list-views, although we only
+// display one at a time.
+func (p *uiCmd) TUI() {
+
+	// Create the applicaiton
+	p.app = tview.NewApplication()
+
+	// Listbox to hold our maildir list.
+	p.maildirList = tview.NewList()
+	p.maildirList.ShowSecondaryText(false)
+	p.maildirList.SetWrapAround(true)
+	p.maildirList.SetHighlightFullLine(true)
 
 	// Listbox to hold our message list.
-	p.messageList = widgets.NewList()
-	p.messageList.Title = "Messages"
-	p.messageList.Rows = []string{}
+	p.messageList = tview.NewList()
+	p.messageList.ShowSecondaryText(false)
+	p.messageList.SetWrapAround(true)
+	p.messageList.SetHighlightFullLine(true)
 
-	// Listbox to hold the contents of a single email
-	p.emailList = widgets.NewList()
-	p.emailList.Title = "Email"
-	p.emailList.Rows = []string{}
+	// Listbox to hold the contents of a single email.
+	p.emailList = tview.NewList()
+	p.emailList.ShowSecondaryText(false)
+	p.emailList.SetWrapAround(true)
+	p.emailList.SetHighlightFullLine(false)
 
-	// Listbox to hold the help
-	p.helpList = widgets.NewList()
-	p.helpList.Title = "Help"
-	p.helpList.Rows = []string{}
+	// Listbox to hold the help-text.
+	p.helpList = tview.NewList()
+	p.helpList.ShowSecondaryText(false)
+	p.helpList.SetWrapAround(true)
+	p.helpList.SetHighlightFullLine(true)
 
-	p.helpList.Rows = strings.Split(
-		`
+	// Setup some global keybindings.
+	p.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 
-This is a simple console-based email client.
-
-This UI is primarily a demo, to prove to the author that the idea of
-a simple set of primitives could be useful.
-
-Navigation with the keyboard is the same in all modes:
-
-Key                | Action
--------------------+--------------------------------------
-q                  | Return to the previous mode
-Q                  | Quit
-j, Down            | Scroll down
-k, Up              | Scroll up
-Ctrl-d             | Scroll down half a page
-Ctrl-u             | Scroll up half a page
-Ctrl-f, PageDown   | Scroll down a page
-Ctrl-b, PageUp     | Scroll up a page
-gg, <, HOME        | Go to top of list
-gG, >, END         | Go to end of list
-w                  | Toggle line-wrap
-Ctrl-j, Ret, Space | Select
-
-Message-View Mode has two more keys
-
-Key | Action
-----+--------------------------
-J   | Select the next message.
-K   | Select the previous message.
-
-Press 'q' to exit this help window.
-
-Steve
---
-`, "\n")
-
-	// Default mode
-	p.mode = "maildir"
-
-	// get the initial lines for the maildir view
-	p.getMaildirs()
-	for _, r := range p.maildirs {
-		p.maildirList.Rows = append(p.maildirList.Rows, r.Rendered)
-	}
-
-	// Process each known-widget
-	tmp := []*widgets.List{p.maildirList,
-		p.messageList,
-		p.emailList,
-		p.helpList}
-
-	// Set the text-style, the size, and colours
-	for _, entry := range tmp {
-		entry.TextStyle = ui.NewStyle(ui.ColorGreen)
-		entry.WrapText = false
-		entry.SetRect(0, 0, width, height)
-	}
-
-	// Render the starting state
-	ui.Render(p.maildirList)
-
-	// We allow some multi-key inputs, which requires
-	// keeping track of the previously typed character.
-	previousKey := ""
-
-	// Poll for events, until we should stop 'run'ning.
-	uiEvents := ui.PollEvents()
-	run := true
-
-	// Since we have three modes, but each of them
-	// uses the same widget-type to display their
-	// output we can just keep a pointer to the one
-	// visible right now - and use that.
-	widget := p.maildirList
-
-	// Loop forever
-	for run {
-
-		// Handle events - mostly this means
-		// responding to keyboard events
-		e := <-uiEvents
-
-		switch e.ID {
-
-		// "?" shows help
-		case "?":
-			p.mode = "help"
-			widget = p.helpList
-
-		// Q quits in all modes.
-		case "Q", "<C-c>":
-			run = false
-
-			// q moves back to the previous mode
-		case "q":
-
-			// maildir -> exit
-			if p.mode == "maildir" {
-				run = false
-			}
-			// index -> maildir
-			if p.mode == "messages" || p.mode == "help" {
-				p.mode = "maildir"
-				widget = p.maildirList
-
-				p.getMaildirs()
-				p.maildirList.Rows = []string{}
-				for _, r := range p.maildirs {
-					p.maildirList.Rows = append(p.maildirList.Rows, r.Rendered)
-				}
-			}
-			// message -> index
-			if p.mode == "message" {
-				p.mode = "messages"
-				widget = p.messageList
-
-				// Update our list of messages
-				p.getMessages()
-
-				// Reset our UI
-				p.messageList.Rows = []string{}
-
-				for _, r := range p.messages {
-					p.messageList.Rows = append(p.messageList.Rows, r.Rendered)
-				}
-			}
-		case "j", "<Down>":
-			widget.ScrollDown()
-		case "k", "<Up>":
-			widget.ScrollUp()
-		case "<C-d>":
-			widget.ScrollHalfPageDown()
-		case "<C-u>":
-			widget.ScrollHalfPageUp()
-		case "<PageDown>", "<C-f>":
-			widget.ScrollPageDown()
-		case "<PageUp>", "<C-b>":
-			widget.ScrollPageUp()
-
-			// gg -> start of list
-		case "g":
-			if previousKey == "g" {
-				widget.ScrollTop()
-				widget.ScrollDown()
-			}
-		case "w":
-			widget.WrapText = !widget.WrapText
-		case "<", "<Home>":
-			widget.ScrollTop()
-			widget.ScrollDown()
-		case ">", "<End>":
-			widget.ScrollBottom()
-			widget.ScrollUp()
-		case "<Enter>", "<C-j>", "<Space>":
-
-			// index -> message
-			if p.mode == "messages" {
-
-				// Change to the message-view mode
-				p.mode = "message"
-				widget = p.emailList
-
-				// Get the message body
-				lines := p.getMessage()
-				p.emailList.Rows = []string{}
-
-				// Update the UI with it
-				p.emailList.Rows = append(p.emailList.Rows, lines...)
-				p.emailList.SelectedRow = 0
-			}
-
-			// maildir -> index
-			if p.mode == "maildir" {
-
-				// Get folder to view.
-				offset := p.maildirList.SelectedRow
-				folder := p.maildirs[offset].Path
-
-				p.mode = "messages"
-				widget = p.messageList
-
-				// Update our list of messages
-				p.getMessages()
-
-				// Reset our UI
-				p.messageList.Rows = []string{}
-
-				for _, r := range p.messages {
-					p.messageList.Rows = append(p.messageList.Rows, r.Rendered)
-				}
-				widget.Title = "messages:" + folder
-				p.messageList.SelectedRow = 0
-			}
-
-			// gG to the end of the list
-		case "G":
-			if previousKey == "g" {
-				widget.ScrollBottom()
-				widget.ScrollUp()
-			}
-		case "J":
-			if p.mode == "message" {
-				offset := p.messageList.SelectedRow
-				if offset < len(p.messageList.Rows)-1 {
-					p.messageList.SelectedRow++
-					// Get the message body
-					lines := p.getMessage()
-					p.emailList.Rows = []string{}
-
-					// Update the UI with it
-					p.emailList.Rows = append(p.emailList.Rows, lines...)
-					p.emailList.SelectedRow = 0
-				}
-			}
-
-		case "K":
-			if p.mode == "message" {
-				offset := p.messageList.SelectedRow
-				if offset > 0 {
-					p.messageList.SelectedRow--
-
-					// Get the message body
-					lines := p.getMessage()
-					p.emailList.Rows = []string{}
-
-					// Update the UI with it
-					p.emailList.Rows = append(p.emailList.Rows, lines...)
-					p.emailList.SelectedRow = 0
-
-				}
-
-			}
-		}
-		if previousKey == "g" {
-			previousKey = ""
-		} else {
-			previousKey = e.ID
+		//
+		// We setup global keybindings, but we actually don't
+		// want these to be truely global.
+		//
+		// If they were then we get a horrid situation where the
+		// user might press "/" to do a text-search, but then
+		// sees failure when they try to search for "jenny".
+		//
+		// The leading "j" would get converted to a down-arrow,
+		// which would then close the search-box.  Yes it took
+		// me a while to appreciate this.
+		//
+		// Ignore ALL custom keybindings unless we're showing
+		// a list-view.  That's a bit gross, but also works.
+		//
+		// FIXME/Hack?
+		//
+		focus := p.app.GetFocus()
+		_, ok := focus.(*tview.List)
+		if !ok {
+			return event
 		}
 
-		ui.Render(widget)
+		// vi-emulation
+		if event.Rune() == rune('j') {
+			return tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone)
+		}
+		if event.Rune() == rune('k') {
+			return tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone)
+		}
+
+		// steve-preferences
+		if event.Rune() == rune('<') {
+			return tcell.NewEventKey(tcell.KeyHome, 0, tcell.ModNone)
+		}
+		if event.Rune() == rune('>') ||
+			event.Rune() == rune('*') {
+			return tcell.NewEventKey(tcell.KeyEnd, 0, tcell.ModNone)
+		}
+
+		// Q: Quit
+		if event.Rune() == rune('Q') {
+			p.app.Stop()
+			return nil
+		}
+
+		// ?: Show help
+		if event.Rune() == rune('?') {
+			p.SetMode("help", true)
+			return nil
+		}
+
+		// /: search for (literal) text
+		if event.Rune() == rune('/') {
+			p.Search()
+			return nil
+		}
+		// q: Exit mode, and return to previous
+		if event.Rune() == rune('q') {
+			p.PreviousMode()
+			return nil
+		}
+		return event
+	})
+
+	// Setup the default mode - we queue this to avoid issues
+	p.app.QueueUpdateDraw(func() {
+		p.SetMode("maildir", true)
+	})
+
+	// Run the mail UI event-loop.
+	//
+	// This runs until something calls `app.Stop()` or a
+	// panic is received.
+	if err := p.app.SetRoot(p.maildirList, true).Run(); err != nil {
+		panic(err)
 	}
 
-	// All done
-	ui.Close()
 }
 
 //
 // Glue
 //
-func (*uiCmd) Name() string     { return "ui" }
-func (*uiCmd) Synopsis() string { return "Show our user-interface." }
+func (*uiCmd) Name() string     { return "tui" }
+func (*uiCmd) Synopsis() string { return "Show our text-based user-interface." }
 func (*uiCmd) Usage() string {
-	return `ui :
-  Show our user-interface.
-  This will let you choose a maildir.
+	return `tui :
+  Show our text-based user-interface.
 `
 }
 
@@ -420,6 +550,7 @@ func (p *uiCmd) SetFlags(f *flag.FlagSet) {
 //
 func (p *uiCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 
-	p.showUI()
+	// Run the TUI
+	p.TUI()
 	return subcommands.ExitSuccess
 }
