@@ -24,6 +24,7 @@ func main() {
 	subcommands.Register(&messageCmd{}, "")
 	subcommands.Register(&versionCmd{}, "")
 	subcommands.Register(&uiCmd{}, "")
+	subcommands.Register(&tuiCmd{}, "")
 
 	flag.Parse()
 	ctx := context.Background()
