@@ -339,7 +339,7 @@ func (p *tuiCmd) Search() {
 
 					// Always search forward from
 					// the next line.
-					cur += 1
+					cur++
 					if cur > max {
 						cur = 0
 					}
