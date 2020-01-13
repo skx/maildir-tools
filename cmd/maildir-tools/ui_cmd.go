@@ -409,6 +409,32 @@ func (p *uiCmd) PreviousMode() {
 	})
 }
 
+// deleteSelectedMessage deletes the message under the point, in
+// the list of messages.
+func (p *uiCmd) deleteSelectedMessage() {
+
+	// Get the current entry.
+	selected := p.messageList.GetCurrentItem()
+
+	// Delete the file
+	path := p.messages[selected].Path
+	os.Remove(path)
+
+	// Reload messages - don't save history
+	p.SetMode("messages", false)
+
+	// Reset the selection
+	if selected >= len(p.messages) {
+		selected--
+	}
+	if selected < 0 {
+		selected = 0
+	}
+
+	// If it is out-of-bounds, decrement
+	p.messageList.SetCurrentItem(selected)
+}
+
 // TUI sets up our user-interface, and handles the execution of the
 // main-loop.
 //
@@ -430,6 +456,15 @@ func (p *uiCmd) TUI() {
 	p.messageList.ShowSecondaryText(false)
 	p.messageList.SetWrapAround(true)
 	p.messageList.SetHighlightFullLine(true)
+
+	// specific binding for message-list
+	p.messageList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Rune() == rune('d') {
+			p.deleteSelectedMessage()
+			return nil
+		}
+		return event
+	})
 
 	// Listbox to hold the contents of a single email.
 	p.emailList = tview.NewList()
