@@ -2,6 +2,17 @@
 // The `ui` sub-command presents a simple GUI using the primitives we've
 // defined elsewhere.
 //
+// This is a modal mail-client which has three main states:
+//
+//  1. `maildirs` - Views the list of maildirs.
+//
+//  2. `messages` - View the list of messages in a maildir folder.
+//
+//  3. `email` - View a single email.
+//
+// Additional modes might appear in the future, such as `help`, `config`,
+// etc.  But these will be more niche and transient.
+//
 
 package main
 
@@ -81,7 +92,7 @@ type uiCmd struct {
 	// TODO: Do we need this?  `messageList` is global so we can
 	// read from that on-demand.   cc:lumail
 	//
-	curMessage string
+	curEmail string
 
 	// List for displaying a single message.
 	emailList *tview.List
@@ -91,11 +102,6 @@ type uiCmd struct {
 
 	// Prefix for our maildir hierarchy
 	prefix string
-
-	// Searching - these shouldn't be global.
-	// TODO: Remove these.
-	searchText string
-	inputField *tview.InputField
 }
 
 // getMaildirs returns ALL maildirs beneath our configured prefix-directory.
@@ -133,10 +139,10 @@ func (p *uiCmd) getMessages() {
 }
 
 // getMessage returns the content of a single email.
-func (p *uiCmd) getMessage() []string {
+func (p *uiCmd) getEmail() []string {
 
 	// The file on-disk
-	file := p.curMessage
+	file := p.curEmail
 
 	// If we have no current-message AND the list is non-empty
 	// then we use the first.  The change-handler doesn't run
@@ -162,7 +168,7 @@ func (p *uiCmd) getMessage() []string {
 //
 //    maildirs | View a list of maildirs.
 //    messages | View a list of messages.
-//    message  | View a single message.
+//    email    | View a single message.
 //    help     | Show our help.
 //
 // TODO:
@@ -205,19 +211,19 @@ func (p *uiCmd) SetMode(mode string, record bool) {
 
 		// Add each (rendered) maildir
 		for _, r := range p.maildirs {
+
+			// When selected it will change mode
 			p.maildirList.AddItem(r.Rendered, r.Path, 0,
 				func() {
-
-					// Change the mode
 					p.SetMode("messages", true)
-
-					// Change the view
-					p.app.SetRoot(p.messageList, true)
-				}).
-				SetChangedFunc(func(index int, rendered string, path string, shorcut rune) {
-					p.curMaildir = path
 				})
 		}
+
+		// When the selection changes we update our current
+		// maildir folder.
+		p.maildirList.SetChangedFunc(func(index int, rendered string, path string, shorcut rune) {
+			p.curMaildir = path
+		})
 
 		// Update UI
 		p.app.SetRoot(p.maildirList, true)
@@ -234,36 +240,36 @@ func (p *uiCmd) SetMode(mode string, record bool) {
 
 		// Add each (rendered) item
 		for _, r := range p.messages {
+
+			// When selected it will change mode
 			p.messageList.AddItem(r.Rendered, r.Path, 0,
 				func() {
-
-					// Change the mode
-					p.SetMode("message", true)
-
-					// Change the view
-					p.app.SetRoot(p.messageList, true)
-				}).
-				SetChangedFunc(func(index int, rendered string, path string, shorcut rune) {
-					p.curMessage = path
+					p.SetMode("email", true)
 				})
 		}
+
+		// When the selection changes we update our current
+		// maildir folder.
+		p.messageList.SetChangedFunc(func(index int, rendered string, path string, shorcut rune) {
+			p.curEmail = path
+		})
 
 		// Update UI
 		p.app.SetRoot(p.messageList, true)
 		return
 	}
 
-	if mode == "message" {
+	if mode == "email" {
 
 		// get the message we want to display
-		txt := p.getMessage()
+		txt := p.getEmail()
 
 		// Empty the list
-		p.messageList.Clear()
+		p.emailList.Clear()
 
 		// Add each (rendered) item
 		for _, r := range txt {
-			p.messageList.AddItem(r, "", 0, nil)
+			p.emailList.AddItem(r, "", 0, nil)
 		}
 
 		// Update UI
@@ -272,8 +278,50 @@ func (p *uiCmd) SetMode(mode string, record bool) {
 	}
 
 	if mode == "help" {
+
+		txt := `
+
+This UI is primarily a demo, to prove to the author that a small collection
+of simple primitives could be turned into a shell-based email client.
+
+The expectation is that most users of 'maildir-tools' will be using the
+scripting facilities, rather than this TUI client.
+
+
+
+Navigation with the keyboard is the same in all modes:
+
+  Key          | Action
+  -------------+--------------------------------------
+  q            | Return to the previous mode.
+  Q            | Quit.
+  j, Down      | Scroll down.
+  k, Up        | Scroll up.
+  PageDown     | Scroll down a page.
+  PageUp       | Scroll up a page.
+  <, HOME      | Go to top of list.
+  >, END       | Go to end of list.
+  Return, Space | Select the item which is highlighted.
+
+
+The email-view mode has additional keybindings:
+
+  Key | Action
+  ----+--------------------------
+    J | Select the next message.
+    K | Select the previous message.
+
+
+
+Press 'q' to exit this help window.
+
+Steve
+`
 		p.helpList.Clear()
-		p.helpList.AddItem("Help goes here", "", 0, nil)
+
+		for _, line := range strings.Split(txt, "\n") {
+			p.helpList.AddItem(line, "", 0, nil)
+		}
 
 		// Update UI
 		p.app.SetRoot(p.helpList, true)
@@ -295,40 +343,41 @@ func (p *uiCmd) SetMode(mode string, record bool) {
 // UI-toolkit.
 func (p *uiCmd) Search() {
 
+	var inputField *tview.InputField
+
 	// Get the old UI element which had focus
 	old := p.app.GetFocus()
 
-	// Prompt for input
-	p.inputField = tview.NewInputField().
+	// Can we cast our (previous) UI-item into a list?
+	//
+	// If we cannot then this function cannot search, so we
+	// must return.
+	l, ok := old.(*tview.List)
+	if !ok {
+		return
+	}
+
+	// Create an input-field for entering the text.
+	inputField = tview.NewInputField().
 		SetLabel("Search: ").
-		SetFieldWidth(40).
-		SetDoneFunc(func(key tcell.Key) {
+		SetFieldWidth(50).
+		SetDoneFunc(
+			func(key tcell.Key) {
 
-			// Highlight the old value
-			p.app.SetRoot(old, true)
+				// Highlight the old value
+				p.app.SetRoot(old, true)
 
-			// If this was a completed enter then do the search
-			if key == tcell.KeyEnter {
+				// If this was a completed enter then do the search
+				if key == tcell.KeyEnter {
 
-				// Get the text - keep the previous
-				// value if this is empty
-				val := p.inputField.GetText()
-				if len(val) > 0 {
-					p.searchText = val
-				}
-				if len(p.searchText) < 1 {
-					return
-				}
+					// Get the search-text
+					val := inputField.GetText()
+					if len(val) < 1 {
+						return
+					}
 
-				// Can we cast our (previous) UI-item
-				// into a list?  If so do it
-				l, ok := old.(*tview.List)
-				if ok {
-
-					//
 					// Search.
-					//
-					inx := l.FindItems(p.searchText, p.searchText, false, true)
+					inx := l.FindItems(val, val, false, true)
 
 					//
 					// We now want to find the "next"
@@ -344,9 +393,11 @@ func (p *uiCmd) Search() {
 						cur = 0
 					}
 
+					// Process each line in the display
 					tested := 0
 					for tested < max {
 
+						// Handle wrap-around
 						offset := cur + tested
 						if offset >= max {
 							offset -= max
@@ -362,12 +413,13 @@ func (p *uiCmd) Search() {
 
 						tested++
 					}
-				}
-			}
-		})
 
-	// update ui
-	p.app.SetRoot(p.inputField, true)
+					// No match.
+				}
+			})
+
+	// Make our new input widget the default/only widget.
+	p.app.SetRoot(inputField, true)
 
 }
 
@@ -435,6 +487,42 @@ func (p *uiCmd) deleteSelectedMessage() {
 	p.messageList.SetCurrentItem(selected)
 }
 
+// NextMessage is the function that moves to the next message, from
+// within the single-email view.
+func (p *uiCmd) NextMessage() {
+	selected := p.messageList.GetCurrentItem()
+	if (selected + 1) < len(p.messages) {
+		selected++
+		p.curEmail = p.messages[selected].Path
+
+		// HORRID: update of offset..
+		p.messageList.SetCurrentItem(selected)
+		p.modeHistory[len(p.modeHistory)-1].offset = selected
+
+		// trigger-reload
+
+		p.SetMode("email", false)
+	}
+
+}
+
+// PrevMessage is the function that moves to the next message, from
+// within the single-email view.
+func (p *uiCmd) PrevMessage() {
+	selected := p.messageList.GetCurrentItem()
+	if selected > 0 {
+		selected--
+		p.curEmail = p.messages[selected].Path
+
+		// HORRID: update of offset..
+		p.messageList.SetCurrentItem(selected)
+		p.modeHistory[len(p.modeHistory)-1].offset = selected
+
+		// trigger-reload
+		p.SetMode("email", false)
+	}
+}
+
 // TUI sets up our user-interface, and handles the execution of the
 // main-loop.
 //
@@ -471,6 +559,19 @@ func (p *uiCmd) TUI() {
 	p.emailList.ShowSecondaryText(false)
 	p.emailList.SetWrapAround(true)
 	p.emailList.SetHighlightFullLine(false)
+
+	// J + K move to next/prev message in the view.
+	p.emailList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Rune() == rune('J') {
+			p.NextMessage()
+			return nil
+		}
+		if event.Rune() == rune('K') {
+			p.PrevMessage()
+			return nil
+		}
+		return event
+	})
 
 	// Listbox to hold the help-text.
 	p.helpList = tview.NewList()
