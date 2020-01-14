@@ -292,7 +292,7 @@ scripting facilities, rather than this TUI client.
 Navigation with the keyboard is the same in all modes:
 
   Key          | Action
-  -------------+--------------------------------------
+  -------------+------------------------------------------------
   q            | Return to the previous mode.
   Q            | Quit.
   j, Down      | Scroll down.
@@ -304,10 +304,19 @@ Navigation with the keyboard is the same in all modes:
   Return, Space | Select the item which is highlighted.
 
 
-The email-view mode has additional keybindings:
+
+The message-index mode has the following additional keybindings:
 
   Key | Action
-  ----+--------------------------
+  ----+---------------------------------------------------------
+    d | Delete the selected message.
+
+
+The email-viewing mode has additional keybindings:
+
+  Key | Action
+  ----+---------------------------------------------------------
+    d | Delete the currently visible message, move to the next.
     J | Select the next message.
     K | Select the previous message.
 
@@ -463,6 +472,9 @@ func (p *uiCmd) PreviousMode() {
 
 // deleteSelectedMessage deletes the message under the point, in
 // the list of messages.
+//
+// You can delete a message as it is being viewed, via the
+// DeleteCurrentMessage function.
 func (p *uiCmd) deleteSelectedMessage() {
 
 	// Get the current entry.
@@ -487,6 +499,43 @@ func (p *uiCmd) deleteSelectedMessage() {
 	p.messageList.SetCurrentItem(selected)
 }
 
+// DeleteCurrentMessage is the function that deletes the currently
+// being viewed message, and moves onto the next if possible.
+//
+// This is distinct from deleting messages while viewing the
+// message-list in the `messages`-mode.
+func (p *uiCmd) DeleteCurrentMessage() {
+
+	// Get the message
+	selected := p.messageList.GetCurrentItem()
+	path := p.messages[selected].Path
+
+	// Delete it
+	os.Remove(path)
+
+	// Remove the entry from the message-list
+	copy(p.messages[selected:], p.messages[selected+1:])
+	p.messages = p.messages[:len(p.messages)-1]
+
+	// Remove the entry from the UI list
+	p.messageList.RemoveItem(selected - 1)
+
+	// Now we have to update the offset of the message
+	// list, and also the history.
+	if selected < len(p.messages) {
+		// this is the element past the previous one,
+		// since we removed an entry.
+		p.modeHistory[len(p.modeHistory)-1].offset = selected
+		p.messageList.SetCurrentItem(selected)
+	} else {
+		if selected >= 1 {
+			p.modeHistory[len(p.modeHistory)-1].offset = selected - 1
+			p.messageList.SetCurrentItem(selected - 1)
+		}
+	}
+	p.SetMode("email", false)
+}
+
 // NextMessage is the function that moves to the next message, from
 // within the single-email view.
 func (p *uiCmd) NextMessage() {
@@ -500,7 +549,6 @@ func (p *uiCmd) NextMessage() {
 		p.modeHistory[len(p.modeHistory)-1].offset = selected
 
 		// trigger-reload
-
 		p.SetMode("email", false)
 	}
 
@@ -562,6 +610,10 @@ func (p *uiCmd) TUI() {
 
 	// J + K move to next/prev message in the view.
 	p.emailList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Rune() == rune('d') {
+			p.DeleteCurrentMessage()
+			return nil
+		}
 		if event.Rune() == rune('J') {
 			p.NextMessage()
 			return nil
