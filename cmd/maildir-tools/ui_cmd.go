@@ -4,7 +4,7 @@
 //
 // This is a modal mail-client which has three main states:
 //
-//  1. `maildirs` - Views the list of maildirs.
+//  1. `maildir` - Views the list of maildirs.
 //
 //  2. `messages` - View the list of messages in a maildir folder.
 //
@@ -166,7 +166,7 @@ func (p *uiCmd) getEmail() []string {
 
 // SetMode updates our global state to be one of:
 //
-//    maildirs | View a list of maildirs.
+//    maildir | View a list of maildirs.
 //    messages | View a list of messages.
 //    email    | View a single message.
 //    help     | Show our help.
@@ -212,8 +212,12 @@ func (p *uiCmd) SetMode(mode string, record bool) {
 		// Add each (rendered) maildir
 		for _, r := range p.maildirs {
 
+			rendered := r.Rendered
+			if strings.Contains(rendered, "people-") {
+				rendered = "[red]" + rendered
+			}
 			// When selected it will change mode
-			p.maildirList.AddItem(r.Rendered, r.Path, 0,
+			p.maildirList.AddItem(rendered, r.Path, 0,
 				func() {
 					p.SetMode("messages", true)
 				})
@@ -717,10 +721,10 @@ func (p *uiCmd) TUI() {
 //
 // Glue
 //
-func (*uiCmd) Name() string     { return "tui" }
+func (*uiCmd) Name() string     { return "ui" }
 func (*uiCmd) Synopsis() string { return "Show our text-based user-interface." }
 func (*uiCmd) Usage() string {
-	return `tui :
+	return `ui :
   Show our text-based user-interface.
 `
 }
