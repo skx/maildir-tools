@@ -118,8 +118,14 @@ func (m *Email) Flags() string {
 		flags = m.Filename[i+3:]
 	}
 
-	// Add on a fake (N)ew flag
+	// Add on a fake (N)ew flag based on filename
 	if strings.Contains(m.Filename, "/new/") {
+		flags += "N"
+	}
+
+	// If the message flags do NOT have (S)een
+	// then it is also new
+	if !strings.Contains(flags, "S") && !strings.Contains(flags, "N") {
 		flags += "N"
 	}
 
@@ -168,7 +174,16 @@ func (m *Email) Body() string {
 
 	}
 
-	// TODO - open the file.  Read until we hit
-	// a newline, then return the contents.
-	return "No body available.  Sorry!"
+	// At this point we're either not using the enmime
+	// library, or we are but it failed to decode something
+	// sane we can use.
+	//
+	// This probably means a message with an inline-part
+	// and no "real" text.
+	//
+	// We can either return nothing, or the encoded body.
+	// The former is perhaps more sane, although it might
+	// cause some confusion.
+	//
+	return "No text/plain, or text/html body was available."
 }
