@@ -95,12 +95,13 @@ $ maildir-tools maildirs --format '#{name}' | grep debian-packages
 
 The following format-strings are available:
 
-|     Flag |                                    Meaning  |
-| -------- | ------------------------------------------- |
-|     name | The name of the folder.                     |
-|shortname | The name of the folder, without the prefix. |
-|    total | The total count of messages in the folder.  |
-|   unread | The count of unread messages in the folder. |
+|             Flag |                                                  Meaning |
+| ---------------- | -------------------------------------------------------- |
+|             name | The name of the folder.                                  |
+|        shortname | The name of the folder, without the prefix.              |
+|            total | The total count of messages in the folder.               |
+|           unread | The count of unread messages in the folder.              |
+| unread_highlight | Returns either "[red]" or "" depending on maildir state. |
 
 
 Flags can be prefixed with a number to denote their width:
@@ -129,13 +130,15 @@ $ maildir-tools messages --format '[#{4flags}] #{from} #{subject}' debian-packag
 
 The following format-strings are available:
 
-|     Flag |                                   Meaning  |
-| -------- | ------------------------------------------ |
-|    flags | The flags of the message.                  |
-|    file  | The filename of the message                |
-|    index | The index of the message in the folder.    |
-|    total | The total count of messages in the folder. |
-| "header" | The content of the named header.           |
+|             Flag |                                                  Meaning |
+| ---------------- | -------------------------------------------------------- |
+|            flags | The flags of the message.                                |
+|            file  | The filename of the message.                             |
+|            index | The index of the message in the folder.                  |
+|            total | The total count of messages in the folder.               |
+|         "header" | The content of the named header.                         |
+| unread_highlight | Returns either "[red]" or "" depending on message state. |
+
 
 Headers are read flexibly, so if you used `#{subject}` the subject-header
 would be returned.  Similar things work for all other headers.
@@ -146,22 +149,31 @@ Flags can be prefixed with a number to denote their width:
 * `#{06index}` means left-pad the `index` field with `0` until it is 6 characters wide.
 * `#{20subject}` means truncate the subject at 20 characters if it is longer.
 
-In addition to the padding/truncation there is one more special case which is the support of displaying email addresses.  For example if you had a message from: `"Steve Kemp" <steve@steve.fi>` then the contents of `#{from}` would be that string.
+In addition to the padding/truncation there is one more special case which is related to formatting email address.  For example if you received a message from me and you tried to display the output of the `From:` header using `#{from}`  you'd see the following:
 
-You might prefer to use:
+* `Steve Kemp <steve@example.fi>`
 
-* "`#{from.name}`" to receive the output "Steve Kemp".
-* "`#{from.email}`" to receive the output "<steve@steve.fi>".
+You might prefer to see only the name, or the email-address, so you could add a suffix to your format-string:
 
+* "`#{from.name}`" would show "Steve Kemp".
+* "`#{from.email}`" would show "<steve@example.fi>".
+
+This works for any of the headers which might contain email-addresses, such as `To:`, `From:`, `Bcc:`, `Cc:`, etc.
 
 
 ## Scripting Usage: Message Display
 
-In the UI there is support for displaying a single message, via the use of:
+There is support for displaying a single message, via the use of:
 
 `$ maildir-tools message path/to/maildir/cur/foo:2,S`
 
-The output of this is currently hardwired, but in the future we might allow it to be changed via a template-file.
+This subcommand uses an embedded template to control how the message is formatted.  If you wish to format the message differently you can specify the path to a template-file to use:
+
+`$ maildir-tools message -template /path/to/template.txt ...`
+
+To help you write a new template you can view the contents of the default one via:
+
+`$ maildir-tools message -dump-template`
 
 
 
