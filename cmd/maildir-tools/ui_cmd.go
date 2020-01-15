@@ -106,7 +106,7 @@ type uiCmd struct {
 
 // getMaildirs returns ALL maildirs beneath our configured prefix-directory.
 func (p *uiCmd) getMaildirs() {
-	helper := &maildirsCmd{prefix: p.prefix, format: "[#{06unread}/#{06total}] #{name}"}
+	helper := &maildirsCmd{prefix: p.prefix, format: "#{unread_highlight}[#{06unread}/#{06total}] #{name}"}
 	p.maildirs = helper.GetMaildirs()
 }
 
@@ -129,7 +129,7 @@ func (p *uiCmd) getMessages() {
 
 	// Get the messages via our helper.
 	helper := &messagesCmd{}
-	p.messages, err = helper.GetMessages(p.curMaildir, "[#{06index}/#{06total} [#{4flags}] #{subject}")
+	p.messages, err = helper.GetMessages(p.curMaildir, "#{unread_highlight}[#{06index}/#{06total} [#{4flags}] #{subject}")
 
 	// Failed to get messages?
 	if err != nil {
@@ -152,6 +152,19 @@ func (p *uiCmd) getEmail() []string {
 			file = p.messages[0].Path
 		}
 	}
+
+	//
+	// TODO: If the message is new then mark it as having
+	// been read
+	//
+	//   x = Message.New( file)
+	//   if ( strings.Contains(x.Flags(), "N") ) {
+    //      -> This will rename the file:
+	//      newFile:= message.MarkRead()
+	//      p.curEmail = newFile
+	//      file = newFile
+	//    }
+	//
 
 	// Get the output
 	helper := &messageCmd{}
@@ -308,12 +321,19 @@ Navigation with the keyboard is the same in all modes:
   Return, Space | Select the item which is highlighted.
 
 
+The maildir-list mode has the following additional keybindings:
+
+  Key | Action
+  ----+---------------------------------------------------------
+    N | Move to the next maildir containing unread messages.
+
 
 The message-index mode has the following additional keybindings:
 
   Key | Action
   ----+---------------------------------------------------------
     d | Delete the selected message.
+    N | Move to the next unread message.
 
 
 The email-viewing mode has additional keybindings:
@@ -347,28 +367,14 @@ Steve
 
 // Search is a function which will operate upon any `List`-based view.
 //
-// It will prompt for text, and select the next entry which matches that
-// text.  The text is matched literally (albeit case-insensitively), rather
-// than as a regular expression.
-//
-// TODO: Support regexp?  We'd have to implement the logic ourselves, but
-// it wouldn't be hard.  Right now we use the List-specific helper from the
-// UI-toolkit.
-func (p *uiCmd) Search() {
+// It will prompt for text, and then call our search-handler to run
+// the actual search
+func (p *uiCmd) SearchPrompt() {
 
 	var inputField *tview.InputField
 
 	// Get the old UI element which had focus
 	old := p.app.GetFocus()
-
-	// Can we cast our (previous) UI-item into a list?
-	//
-	// If we cannot then this function cannot search, so we
-	// must return.
-	l, ok := old.(*tview.List)
-	if !ok {
-		return
-	}
 
 	// Create an input-field for entering the text.
 	inputField = tview.NewInputField().
@@ -377,10 +383,11 @@ func (p *uiCmd) Search() {
 		SetDoneFunc(
 			func(key tcell.Key) {
 
-				// Highlight the old value
+				// Highlight the old widget
 				p.app.SetRoot(old, true)
 
-				// If this was a completed enter then do the search
+				// If the text was completed properly
+				// then we can go on to run the search
 				if key == tcell.KeyEnter {
 
 					// Get the search-text
@@ -389,51 +396,70 @@ func (p *uiCmd) Search() {
 						return
 					}
 
-					// Search.
-					inx := l.FindItems(val, val, false, true)
-
-					//
-					// We now want to find the "next"
-					// match, handling wrap-arround.
-					//
-					cur := l.GetCurrentItem()
-					max := l.GetItemCount()
-
-					// Always search forward from
-					// the next line.
-					cur++
-					if cur > max {
-						cur = 0
-					}
-
-					// Process each line in the display
-					tested := 0
-					for tested < max {
-
-						// Handle wrap-around
-						offset := cur + tested
-						if offset >= max {
-							offset -= max
-						}
-
-						// Grossly inefficient..
-						for _, j := range inx {
-							if j == offset {
-								l.SetCurrentItem(j)
-								return
-							}
-						}
-
-						tested++
-					}
-
-					// No match.
+					// Run the search
+					p.Search(val)
 				}
 			})
 
 	// Make our new input widget the default/only widget.
 	p.app.SetRoot(inputField, true)
 
+}
+
+// Search is called with text and selects the next entry in our
+// list which matches - literally.
+//
+// TODO: Support regexp?  We'd have to implement the logic ourselves, but
+// it wouldn't be hard.  Right now we use the List-specific helper from the
+// UI-toolkit.
+func (p *uiCmd) Search(text string) {
+
+	// Get the UI element which has focus
+	widget := p.app.GetFocus()
+	list, ok := widget.(*tview.List)
+	if !ok {
+		return
+	}
+
+	// Search.
+	inx := list.FindItems(text, text, false, true)
+
+	//
+	// We now want to find the "next"
+	// match, handling wrap-arround.
+	//
+	cur := list.GetCurrentItem()
+	max := list.GetItemCount()
+
+	// Always search forward from
+	// the next line.
+	cur++
+	if cur > max {
+		cur = 0
+	}
+
+	// Process each line in the display
+	tested := 0
+	for tested < max {
+
+		// Handle wrap-around
+		offset := cur + tested
+		if offset >= max {
+			offset -= max
+		}
+
+		// Grossly inefficient..
+		for _, j := range inx {
+			if j == offset {
+				list.SetCurrentItem(j)
+				return
+			}
+		}
+
+		tested++
+	}
+
+	// No match.
 }
 
 // Return to the previous mode, if possible, using our history-stack.
@@ -582,7 +608,7 @@ func (p *uiCmd) PrevMessage() {
 // display one at a time.
 func (p *uiCmd) TUI() {
 
-	// Create the applicaiton
+	// Create a new application.
 	p.app = tview.NewApplication()
 
 	// Listbox to hold our maildir list.
@@ -591,16 +617,34 @@ func (p *uiCmd) TUI() {
 	p.maildirList.SetWrapAround(true)
 	p.maildirList.SetHighlightFullLine(true)
 
+	// keybinding for the maildir-list
+	p.maildirList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// jump to next maildir with unread messages
+		if event.Rune() == rune('N') {
+			// TODO: Make configurable
+			p.Search("[red]")
+			return nil
+		}
+		return event
+	})
+
 	// Listbox to hold our message list.
 	p.messageList = tview.NewList()
 	p.messageList.ShowSecondaryText(false)
 	p.messageList.SetWrapAround(true)
 	p.messageList.SetHighlightFullLine(true)
 
-	// specific binding for message-list
+	// keybinding for the message-list.
 	p.messageList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// delete message
 		if event.Rune() == rune('d') {
 			p.deleteSelectedMessage()
+			return nil
+		}
+		// jump to next unread message.
+		if event.Rune() == rune('N') {
+			// TODO: Make configurable
+			p.Search("[red]")
 			return nil
 		}
 		return event
@@ -612,16 +656,19 @@ func (p *uiCmd) TUI() {
 	p.emailList.SetWrapAround(true)
 	p.emailList.SetHighlightFullLine(false)
 
-	// J + K move to next/prev message in the view.
+	// keybinding for the email message
 	p.emailList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// delete message
 		if event.Rune() == rune('d') {
 			p.DeleteCurrentMessage()
 			return nil
 		}
+		// Next message.
 		if event.Rune() == rune('J') {
 			p.NextMessage()
 			return nil
 		}
+		// Previous message
 		if event.Rune() == rune('K') {
 			p.PrevMessage()
 			return nil
@@ -635,7 +682,9 @@ func (p *uiCmd) TUI() {
 	p.helpList.SetWrapAround(true)
 	p.helpList.SetHighlightFullLine(true)
 
+	//
 	// Setup some global keybindings.
+	//
 	p.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 
 		//
@@ -644,11 +693,9 @@ func (p *uiCmd) TUI() {
 		//
 		// If they were then we get a horrid situation where the
 		// user might press "/" to do a text-search, but then
-		// sees failure when they try to search for "jenny".
-		//
-		// The leading "j" would get converted to a down-arrow,
-		// which would then close the search-box.  Yes it took
-		// me a while to appreciate this.
+		// sees failure when they try to search for "jenny",
+		// because the leading "j" would get converted to a down-arrow,
+		// which would then close the search-box.
 		//
 		// Ignore ALL custom keybindings unless we're showing
 		// a list-view.  That's a bit gross, but also works.
@@ -692,7 +739,7 @@ func (p *uiCmd) TUI() {
 
 		// /: search for (literal) text
 		if event.Rune() == rune('/') {
-			p.Search()
+			p.SearchPrompt()
 			return nil
 		}
 		// q: Exit mode, and return to previous
@@ -703,15 +750,19 @@ func (p *uiCmd) TUI() {
 		return event
 	})
 
-	// Setup the default mode - we queue this to avoid issues
+	//
+	// Setup the default mode - we queue this to avoid issues.
+	//
 	p.app.QueueUpdateDraw(func() {
 		p.SetMode("maildir", true)
 	})
 
-	// Run the mail UI event-loop.
+	//
+	// Now we run the main UI event-loop.
 	//
 	// This runs until something calls `app.Stop()` or a
 	// panic is received.
+	//
 	if err := p.app.SetRoot(p.maildirList, true).Run(); err != nil {
 		panic(err)
 	}

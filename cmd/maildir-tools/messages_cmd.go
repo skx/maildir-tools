@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/subcommands"
 	"github.com/skx/maildir-tools/finder"
@@ -140,6 +141,12 @@ func (p *messagesCmd) GetMessages(path string, format string) ([]SingleMessage, 
 			ret := ""
 
 			switch field {
+			case "unread_highlight":
+				// Allow highlighting in the UI
+				if strings.Contains(mail.Flags(), "N") {
+					return "[red]"
+				}
+				return ""
 			case "flags":
 				ret = mail.Flags()
 			case "file":

@@ -76,13 +76,16 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 	maildirs := finder.Maildirs()
 
 	//
-	// Do we need to count files?
+	// Do we need to count the files inside our maildirs?
 	//
 	// If we can avoid it that speeds things up :)
 	//
 	count := false
-	if strings.Contains(p.format, "total}") || strings.Contains(p.format, "unread}") {
-		count = true
+	countFormats := []string{"total", "unread", "unread_highlight"}
+	for _, tmp := range countFormats {
+		if strings.Contains(p.format, tmp) {
+			count = true
+		}
 	}
 
 	//
@@ -141,6 +144,12 @@ func (p *maildirsCmd) GetMaildirs() []Maildir {
 				ret = fmt.Sprintf("%d", total)
 			case "unread":
 				ret = fmt.Sprintf("%d", unread)
+			case "unread_highlight":
+				// Highlighting for UI
+				if unread > 0 {
+					return "[red]"
+				}
+				return ""
 			default:
 				ret = "Unknown variable " + field
 			}
